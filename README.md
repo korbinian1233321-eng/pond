@@ -20,7 +20,7 @@ node server.js          # 不需要 npm install
 # 打开 http://127.0.0.1:3000 ，用 admin / pond1234 登录
 ```
 
-![Pond 首页与鱼汛](docs/screenshots/chat-desktop.png)
+![Pond 首页](docs/screenshots/home.png)
 
 ---
 
@@ -101,7 +101,7 @@ Pond 就只做这件事，做完整，做干净。前四条是论坛，最后一
 **工程**
 
 - 服务端渲染无关的纯静态前端（原生 JS，无框架、无打包）
-- 响应式：桌面三栏 / 平板两栏 / 手机单栏 + 横向滑动导航
+- 响应式：桌面三栏 / 平板两栏 / 手机单栏 + 横向滑动导航（[手机端截图](docs/screenshots/chat-mobile.png)）
 - 全站 CSP、`X-Content-Type-Options`、`SameSite=Lax` Cookie
 - 18 个 API 测试（`node --test`，无测试框架依赖），含一条真的开 SSE 连接收广播的用例
 
