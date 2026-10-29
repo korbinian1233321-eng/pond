@@ -1,0 +1,56 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # 没有依赖要装，所以没有 npm ci
+      - name: 确认 node:sqlite 可用
+        run: |
+          node -v
+          node -e "const {DatabaseSync}=require('node:sqlite'); const d=new DatabaseSync(':memory:'); d.exec('CREATE TABLE t(a)'); console.log('node:sqlite ok')"
+
+      - name: 接口测试
+        run: npm test
+
+      - name: 启动冒烟
+        run: |
+          POND_PORT=3100 POND_HOST=127.0.0.1 node --disable-warning=ExperimentalWarning server.js &
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:3100/api/bootstrap > /dev/null; then
+              echo "服务已就绪"
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "服务 20 秒内没起来"
+          exit 1
+
+      - name: 确认示例数据能渲染
+        run: |
+          POND_PORT=3100 POND_HOST=127.0.0.1 node --disable-warning=ExperimentalWarning server.js &
+          for i in $(seq 1 40); do
+            curl -sf http://127.0.0.1:3100/api/bootstrap > /dev/null && break
+            sleep 0.5
+          done
+          curl -sf 'http://127.0.0.1:3100/api/posts?limit=3' | head -c 200
+          echo
+          curl -sf 'http://127.0.0.1:3100/api/chat/messages?limit=3' | head -c 200

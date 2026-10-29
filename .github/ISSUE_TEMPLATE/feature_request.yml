@@ -1,0 +1,46 @@
+name: 提个想法
+description: 想要一个现在没有的功能
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        这个项目的原则是「砍掉一个功能比加一个更需要勇气」。
+
+        所以请先说服我们：**不加这个功能，谁在什么场景下会疼。**
+        泛泛地说「别家都有」说服力不够——请说清楚是哪个社区、多少人、发生了什么。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到的问题
+      description: 描述场景，先别急着描述方案
+      placeholder: |
+        我们塘里有三十来个人，每次有人发图只能贴外链，
+        图床挂过一次，那批帖子全变成了空白。
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你想到的做法
+      description: 有想法就写，没有也没关系
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: 现在怎么绕过去
+      description: 如果已经有凑合的办法，说明这个需求可能没那么急
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: 自查
+      options:
+        - label: 我看过 README 的「设计取舍」一节，这不是一个被刻意不做掉的功能
+          required: true
+        - label: 这个功能不需要引入 npm 依赖（或者我认为值得为此破例，理由写在上面）
+          required: true

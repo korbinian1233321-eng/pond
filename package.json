@@ -1,0 +1,47 @@
+{
+  "name": "pond",
+  "version": "0.2.0",
+  "description": "零依赖的自托管社区引擎：塘 + 楼层 + 实时聊天。一个 node server.js 就能跑。",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test",
+    "test:watch": "node --disable-warning=ExperimentalWarning --test --watch"
+  },
+  "files": [
+    "server.js",
+    "pond.config.js",
+    "lib/",
+    "public/",
+    "docs/API.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "forum",
+    "bbs",
+    "community",
+    "self-hosted",
+    "zero-dependency",
+    "sqlite",
+    "sse",
+    "chinese",
+    "论坛",
+    "社区"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/korbinian1233321-eng/pond.git"
+  },
+  "bugs": {
+    "url": "https://github.com/korbinian1233321-eng/pond/issues"
+  },
+  "homepage": "https://github.com/korbinian1233321-eng/pond#readme"
+}

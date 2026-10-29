@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="大肥鱼塘 · 一个塘，一群鱼" />
+<title>大肥鱼塘</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6bf6'/%3E%3Cpath d='M6 17c0-4 3.6-6.8 8-6.8 3.8 0 6.6 2 7.5 5l3.5-1.9v7.4l-3.5-1.9c-1.1 2.7-3.8 4.5-7.5 4.5C9.6 23.3 6 20.8 6 17z' fill='%23fff'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#/" id="brandLink">
+      <span class="brand-mark">
+        <svg viewBox="0 0 32 32" width="19" height="19" fill="none" aria-hidden="true">
+          <path d="M4 17.6c0-4.6 4.2-7.9 9.2-7.9 4.4 0 7.6 2.4 8.7 5.7l4.1-2.1v8.6l-4.1-2.1c-1.3 3.1-4.4 5.2-8.7 5.2C8.2 25 4 21.9 4 17.6z" fill="currentColor"/>
+          <circle cx="11.4" cy="16" r="1.15" fill="#fff"/>
+          <path d="M15 6.2c0-1.6 1.3-2.8 2.9-2.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="brand-text" id="brandText">大肥鱼塘<em>一个塘，一群鱼</em></span>
+    </a>
+
+    <div class="search">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>
+      </svg>
+      <input id="searchInput" type="search" placeholder="搜楼、搜鱼、搜梗…" autocomplete="off" aria-label="搜索" />
+    </div>
+
+    <div class="topbar-actions">
+      <button class="btn btn-primary" id="newPostBtn">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        <span>开新楼</span>
+      </button>
+      <button class="bell-btn" id="bellBtn" aria-label="通知" hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M18 8.6a6 6 0 1 0-12 0c0 5-2 6.4-2 6.4h16s-2-1.4-2-6.4z"/><path d="M10.3 19a2 2 0 0 0 3.4 0"/></svg>
+        <i class="bell-dot" id="bellDot" hidden></i>
+      </button>
+      <button class="avatar-btn" id="meBtn" aria-label="我的鱼档"></button>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav class="nav" id="navList"></nav>
+    <div class="side-block">
+      <h4>塘口</h4>
+      <div class="tag-list" id="tagList"></div>
+    </div>
+    <div class="side-block side-note">
+      <p>现在只有这一个塘。<br>等教程和二创真的撑得住，再分塘。</p>
+    </div>
+  </aside>
+
+  <main id="main" aria-live="polite"></main>
+
+  <aside class="rail" id="rail"></aside>
+</div>
+
+<div class="notif-panel" id="notifPanel" hidden>
+  <div class="notif-head">
+    <strong>通知</strong>
+    <button class="btn btn-ghost btn-sm" id="notifReadAll">全部已读</button>
+  </div>
+  <div class="notif-list" id="notifList"></div>
+</div>
+
+<div class="overlay" id="authModal" hidden>
+  <div class="dialog dialog-sm" role="dialog" aria-modal="true" aria-label="登录或注册">
+    <div class="dialog-head">
+      <h3 id="authTitle">登录鱼塘</h3>
+      <button class="icon-btn" data-close="authModal" aria-label="关闭">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="seg" id="authSeg">
+      <button class="seg-item on" data-auth="login" type="button">登录</button>
+      <button class="seg-item" data-auth="register" type="button">注册</button>
+    </div>
+    <form id="authForm" autocomplete="on">
+      <label class="field">
+        <span>账号</span>
+        <input id="authUser" name="username" autocomplete="username" placeholder="小写字母、数字、下划线" required />
+      </label>
+      <label class="field">
+        <span>密码</span>
+        <input id="authPass" name="password" type="password" autocomplete="current-password" placeholder="至少 8 位" required />
+      </label>
+      <div id="registerOnly" hidden>
+        <label class="field">
+          <span>你的鱼叫什么</span>
+          <input id="authFish" name="fishName" placeholder="比如：青柠气泡" />
+        </label>
+        <label class="field">
+          <span>品种</span>
+          <select id="authType" name="fishType">
+            <option>女仆鲸</option>
+            <option>摸鱼鲸</option>
+            <option>野生鲸</option>
+            <option>数据鲸</option>
+            <option>咸鱼</option>
+          </select>
+        </label>
+      </div>
+      <p class="form-err" id="authErr" hidden></p>
+      <div class="dialog-foot">
+        <span class="hint" id="authHint">新鱼第一天只能回复，不能开楼</span>
+        <button class="btn btn-primary" type="submit" id="authSubmit">登录</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="overlay" id="composer" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="开新楼">
+    <div class="dialog-head">
+      <h3>开一层新楼</h3>
+      <button class="icon-btn" data-close="composer" aria-label="关闭">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div id="composerBody">
+      <input class="field-title" id="postTitle" maxlength="80" placeholder="楼名（可以留空，会自动截取正文）" />
+      <textarea class="field-body" id="postBody" placeholder="楼主说点什么…支持 **加粗** 和 `代码`"></textarea>
+      <div class="quote-field">
+        <label for="postQuote">鱼言鱼语 · 可选</label>
+        <input id="postQuote" maxlength="140" placeholder="贴一句你的鱼说过的话，比如「本鲸今天想吃红烧肉」" />
+      </div>
+      <div class="tag-picker">
+        <span class="tag-picker-label">选个塘口（最多 2 个）</span>
+        <div class="chips" id="postTags"></div>
+      </div>
+      <div class="dialog-foot">
+        <span class="hint">Ctrl + Enter 直接开楼</span>
+        <button class="btn btn-primary" id="publishBtn">开楼</button>
+      </div>
+    </div>
+    <div id="composerLocked" hidden>
+      <p class="locked-note" id="lockedNote"></p>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modModal" hidden>
+  <div class="dialog dialog-sm" role="dialog" aria-modal="true" aria-label="版务">
+    <div class="dialog-head">
+      <h3>版务操作</h3>
+      <button class="icon-btn" data-close="modModal" aria-label="关闭">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="mod-actions" id="modActions"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

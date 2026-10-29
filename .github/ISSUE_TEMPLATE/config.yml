@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全问题
+    url: https://github.com/korbinian1233321-eng/pond/security/advisories/new
+    about: 能读到别人的数据、能绕过权限、能打挂服务——这些请不要开公开 issue
+  - name: 部署与配置问题
+    url: https://github.com/korbinian1233321-eng/pond/blob/main/README.md
+    about: 先看 README 的「配置」「部署」「把第一个用户设成管理员」三节

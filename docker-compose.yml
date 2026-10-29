@@ -1,0 +1,28 @@
+services:
+  pond:
+    build: .
+    image: pond:latest
+    container_name: pond
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      POND_HOST: "0.0.0.0"
+      POND_PORT: "3000"
+      POND_NAME: "大肥鱼塘"
+      POND_TAGLINE: "一个塘，一群鱼"
+      # 生产环境建议改成 1，跳过示例数据
+      POND_NO_SEED: "0"
+      # 通过 HTTPS 反代访问时改成 1
+      POND_SECURE_COOKIE: "0"
+    volumes:
+      - pond-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/bootstrap').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  pond-data:

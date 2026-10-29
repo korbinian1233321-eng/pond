@@ -1,0 +1,10 @@
+# 统一换行符，避免 Windows 提交把整个仓库变成 CRLF
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+
+# 这两个文件如果被转成 CRLF，Linux 上跑不起来
+*.sh text eol=lf
+Dockerfile text eol=lf

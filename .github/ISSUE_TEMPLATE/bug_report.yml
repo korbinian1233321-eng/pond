@@ -1,0 +1,64 @@
+name: 报告问题
+description: 有东西没按预期工作
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先谢谢。把「怎么复现」写清楚，比写十句「不好用」有用一百倍。
+
+        如果是安全问题（能读到别人的数据、能绕过权限、能打挂服务），**不要开公开 issue**，看 [SECURITY.md](../blob/main/SECURITY.md)。
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 你期望的结果，和实际的结果
+      placeholder: 点「投喂」之后按钮一直转圈，刷新之后发现其实投成功了
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 用 admin 登录
+        2. 打开任意一层楼
+        3. 点「投喂」
+        4. 按钮卡住不回来
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node 版本
+      placeholder: v22.22.2（`node -v` 的输出）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: env
+    attributes:
+      label: 怎么跑的
+      options:
+        - 本地 node server.js
+        - Docker / docker compose
+        - 前面挂了 Nginx 或 Caddy
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 服务端日志
+      description: 控制台里的报错，有多少贴多少
+      render: shell
+
+  - type: textarea
+    id: modified
+    attributes:
+      label: 你改过什么
+      description: 如果这是 fork 的站点，说说改了 `pond.config.js` 还是改了代码。不说的话很难判断是不是你自己的改动引起的
