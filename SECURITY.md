@@ -30,7 +30,8 @@
 | 口令 | scrypt + 每用户独立 salt，比对用 `crypto.timingSafeEqual` | `lib/auth.js` |
 | 会话 | 32 字节随机 token，存数据库，HttpOnly + SameSite=Lax，30 天过期 | `lib/auth.js` |
 | CSRF | 写接口强制 `Content-Type: application/json`，配合 SameSite=Lax 挡住表单提交 | `lib/api.js` |
-| XSS | 前端所有插值走 `esc()`；全站 CSP 禁 inline script | `public/app.js` / `server.js` |
+| XSS（前端） | 所有插值走 `esc()`；全站 CSP 禁 inline script | `public/app.js` / `server.js` |
+| XSS（服务端渲染） | 拼进 HTML 的用户内容同样走 `esc()`；JSON-LD 里的 `<` 转成 `\u003c`，防止提前闭合 `</script>` | `lib/render.js` |
 | 点击劫持 | `X-Frame-Options: SAMEORIGIN` | `server.js` |
 | MIME 嗅探 | `X-Content-Type-Options: nosniff` | `server.js` |
 | 路径穿越 | 静态资源解析后校验前缀，越界返回 403 | `lib/http.js` |

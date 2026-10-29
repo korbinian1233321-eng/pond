@@ -13,6 +13,37 @@
 
 ---
 
+## [0.3.0] - 2026-10-30
+
+「让爬虫看得见」版本。之前整个站是一个空壳 HTML，爬虫抓到的内容为零，每一层楼都搜不到。
+
+### 新增
+
+- **真路径路由**：`#/p/:id` → `/p/:id`，另有 `/u/:id`、`/t/:tag`、`/chat`、`/basket`、`/following`
+  - 走 `history.pushState` / `popstate`，不整页刷新，浏览器前进后退正常
+  - 老 hash 链接进来会 `replaceState` 成真路径，不会 404
+- **服务端渲染**（`lib/render.js`）：`/`、`/p/:id`、`/u/:id`、`/t/:tag` 先把正文拼进 HTML
+  - 每页注入 `title`、`description`、`canonical`、OG、`twitter:card`
+  - 楼层页带 `DiscussionForumPosting` 结构化数据，鱼档页带 `ProfilePage`
+  - 浏览器加载完 `app.js` 后整个替换成可交互版本；首屏不再闪骨架屏
+- **`/sitemap.xml`**：首页 + 全部塘口 + 全部楼层 + 全部鱼档，带 `lastmod`，同 URL 自动去重
+- **`/robots.txt`**：放行正文页，挡住 `/api/`、`/chat`、`/basket`、`/following`
+- **`POND_BASE_URL`**：指定对外绝对地址，`canonical` / sitemap 用它拼网址；不设则从 `X-Forwarded-Proto` / `Host` 推断
+- 不存在的楼返回 **404**（带 `X-Robots-Tag: noindex`），不再返回 200 的空壳
+- 测试 18 → 26，新增 `test/seo.test.js`
+
+### 变更
+
+- 楼列表、侧栏塘口、返回链接从 `<button>` 改成 `<a href>`：能被爬虫跟随、能中键新标签页打开、能复制链接
+- 页面标题跟着视图走（`楼层标题 · 站点名`），不再是全站一个标题
+- 摘要里的 `**加粗**`、`` `代码` `` 标记会先剥掉再进 `meta description`
+
+### 修复
+
+- `applyBranding()` 每次刷新都会把 `document.title` 改回站点名，覆盖掉当前页标题
+
+---
+
 ## [0.2.0] - 2026-10-30
 
 ### 新增
@@ -63,6 +94,7 @@
 - 12 个接口测试
 - Docker / docker-compose 部署
 
-[Unreleased]: https://github.com/korbinian1233321-eng/pond/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/korbinian1233321-eng/pond/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/korbinian1233321-eng/pond/releases/tag/v0.1.0

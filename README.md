@@ -63,6 +63,8 @@ Pond 就只做这件事，做完整，做干净。前四条是论坛，最后一
 
 **内容**
 
+![楼层页 · 桌面端](docs/screenshots/post.png)
+
 - 塘（单一板块）+ 楼层结构：1 楼楼主正文，2 楼起为回复
 - 楼中楼：回复可以挂在某一层下，一层嵌套，默认折叠到 2 条
 - 「只看楼主」开关
@@ -100,10 +102,13 @@ Pond 就只做这件事，做完整，做干净。前四条是论坛，最后一
 
 **工程**
 
-- 服务端渲染无关的纯静态前端（原生 JS，无框架、无打包）
+- 真路径路由：`/p/:id`、`/u/:id`、`/t/:tag`，每一层楼都是一个能被搜索引擎收录的独立网址
+- 服务端先把页面渲染一遍，爬虫不带 JS 也能读到完整正文（浏览器接手后换成可交互版本）
+- 自动生成 `sitemap.xml` / `robots.txt`，每页带 `title` / `description` / `canonical` / OG / JSON-LD
+- 前端是原生 JS，无框架、无打包、无构建步骤
 - 响应式：桌面三栏 / 平板两栏 / 手机单栏 + 横向滑动导航（[手机端截图](docs/screenshots/chat-mobile.png)）
 - 全站 CSP、`X-Content-Type-Options`、`SameSite=Lax` Cookie
-- 18 个 API 测试（`node --test`，无测试框架依赖），含一条真的开 SSE 连接收广播的用例
+- 26 个测试（`node --test`，无测试框架依赖），含一条真的开 SSE 连接收广播的用例，和一组「关掉 JS 还有没有内容」的断言
 
 ---
 
@@ -207,6 +212,7 @@ POND_ADMIN=yourname node server.js
 | `POND_NO_SEED` | `0` | 设 `1` 跳过示例数据 |
 | `POND_SEED_FORCE` | `0` | 设 `1` 强制写入示例数据（测试用，绕过塘口检查） |
 | `POND_SECURE_COOKIE` | `0` | HTTPS 部署时设 `1` |
+| `POND_BASE_URL` | 从请求头推断 | 对外的绝对地址，如 `https://yu.example.com`。`canonical` 和 `sitemap` 用它拼网址，反代后面建议显式设 |
 
 **塘规、塘口、信任规则只从 `pond.config.js` 读**，没有对应的环境变量——它们是数组和对象，塞进环境变量只会更难读。
 
@@ -259,6 +265,40 @@ sqlite3 data/pond.db ".backup 'backup-$(date +%F).db'"
 
 直接 `cp` 也可以，但要先停服务，否则可能漏掉 WAL 里的数据。
 
+### 让搜索引擎收录
+
+Pond 出来就是可收录的，不用装插件、不用改模板：
+
+| 地址 | 是什么 |
+|---|---|
+| `/robots.txt` | 放行正文页，挡住 `/api/`、`/chat`、`/basket`、`/following` |
+| `/sitemap.xml` | 首页 + 全部塘口 + 全部楼层 + 全部鱼档，带 `lastmod` |
+| `/p/:id` | 楼层页，带 `DiscussionForumPosting` 结构化数据 |
+| `/u/:id` | 鱼档页，带 `ProfilePage` 结构化数据 |
+| `/t/:tag` | 塘口页，列出该标签下所有楼 |
+
+上线之后：
+
+1. 设 `POND_BASE_URL=https://你的域名`——不设的话 `canonical` 会写成请求头里的地址，反代后面容易写错
+2. 把 sitemap 提交到 [Google Search Console](https://search.google.com/search-console) 和 [百度搜索资源平台](https://ziyuan.baidu.com/)
+3. 等着。Google 几天到两周，百度几周到几个月；新域名还有沙盒期，排名不会立刻起来
+
+想确认爬虫到底看见什么，直接看原始 HTML：
+
+```bash
+# 换成真实楼层 id
+curl -s http://127.0.0.1:3000/p/p_xxxx | grep -o '<h1 class="post-h1">[^<]*'
+```
+
+能打印出标题，说明正文就在 HTML 里，不是等 JS 渲染的。
+
+> 别只测首页。真正决定能不能被搜到的是**楼层页**——首页只有 20 层楼的入口，具体的讨论内容全在 `/p/:id` 上。
+
+关掉 JavaScript 之后长这样——正文、楼层、作者、时间全在，只是没有交互：
+
+![没有 JS 时的楼层页](docs/screenshots/post-nojs.png)
+
+
 ---
 
 ## 项目结构
@@ -266,19 +306,22 @@ sqlite3 data/pond.db ".backup 'backup-$(date +%F).db'"
 ```
 pond/
 ├── pond.config.js       # ★ 站点配置：名字、塘规、塘口、信任规则。fork 只改这里
-├── server.js            # HTTP 入口：静态资源 + /api 分发 + 安全头 + 配置自检
+├── server.js            # HTTP 入口：页面渲染 / 静态资源 / /api 分发 / 安全头 / 配置自检
 ├── lib/
 │   ├── db.js            # SQLite 建表与连接（node:sqlite）
 │   ├── auth.js          # scrypt 口令、会话、信任等级
 │   ├── http.js          # JSON 收发、静态资源、内存限流
 │   ├── api.js           # 全部接口实现
+│   ├── render.js        # 服务端渲染：给爬虫的那一份 HTML + sitemap / robots
 │   ├── chat.js          # 鱼汛：SSE 连接池、在线名单、广播
 │   └── seed.js          # 示例数据（塘口不匹配时自动跳过）
 ├── public/
-│   ├── index.html       # 单页外壳
+│   ├── index.html       # 单页外壳（服务端渲染往里注入正文）
 │   ├── styles.css       # 全部样式
-│   └── app.js           # 前端逻辑（原生 JS，hash 路由）
-├── test/api.test.js     # 18 个接口测试
+│   └── app.js           # 前端逻辑（原生 JS，真路径 + History 路由）
+├── test/
+│   ├── api.test.js      # 18 个接口测试
+│   └── seo.test.js      # 8 个服务端渲染 / 可收录性测试
 ├── docs/API.md          # 接口文档
 ├── .github/workflows/   # CI：Node 22 / 24 + 启动冒烟
 ├── Dockerfile
@@ -329,6 +372,14 @@ Discourse 和 Flarum 都有扩展市场，那是因为它们要服务几百种�
 
 代价是升级会冲突。这也是为什么配置被抽到 `pond.config.js`：**改配置不会冲突，改代码会。**
 
+**服务端也渲染一遍，哪怕前端是单页应用。**
+
+单页应用的问题不是慢，是**空白**：HTML 里只有一个 `<main></main>`，所有内容等 JS 去取。爬虫拿到的是一片空壳，于是每一层楼都搜不到。
+
+所以 `/`、`/p/:id`、`/u/:id`、`/t/:tag` 这四条路径走服务端渲染：把正文直接拼进 HTML，补上 `title`、`description`、`canonical`、OG 和 JSON-LD，浏览器加载完再换成可交互的版本。
+
+这不是两套前端。服务端那份只求「内容完整、语义正确、样式不难看」，不追求和前端逐像素一致——它是给爬虫的，也是给首屏的。代价是 `lib/render.js` 和 `public/app.js` 各有一份排版代码，会漂移；好处是不用引 SSR 框架，也不用共享模板，`node server.js` 还是一个命令就能跑。
+
 ---
 
 ## 接口
@@ -361,9 +412,13 @@ curl -X POST http://127.0.0.1:3000/api/chat/messages \
 npm test
 ```
 
-18 个用例覆盖：鉴权、信任等级、发帖、盖楼、楼中楼、投喂幂等、收藏、关注与通知、版主权限、404、Content-Type 校验、登出，以及鱼汛的六项（历史分页、未登录拦截、长度截断、`after` 增量、版主删除、**真的开一条 SSE 连接并收到广播**）。
+26 个用例，分两组。
+
+**接口（18 个）**：鉴权、信任等级、发帖、盖楼、楼中楼、投喂幂等、收藏、关注与通知、版主权限、404、Content-Type 校验、登出，以及鱼汛的六项（历史分页、未登录拦截、长度截断、`after` 增量、版主删除、**真的开一条 SSE 连接并收到广播**）。
 
 最后那条不是 mock：测试会 `fetch` 一个 `text/event-stream`，用 `ReadableStream` 一行行读，再让另一个账号发消息，断言事件确实到了。写完这个用例才敢说「实时是通的」。
+
+**服务端渲染（8 个）**：直接对原始 HTML 做字符串断言，不跑前端、不解析 DOM——因为要验的就是「不带 JS 能不能看见」。覆盖首页楼列表、楼层正文与结构化数据、塘口页与鱼档页、不存在的楼返回 404、`sitemap.xml` 和 `robots.txt`、`POND_BASE_URL` 覆盖域名，以及**发一条带 `<script>` 的帖子，断言它被转义成实体**。
 
 每个用例用独立临时数据库，跑完自动删除。
 

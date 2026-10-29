@@ -15,6 +15,7 @@ const { db } = require('./lib/db');
 const auth = require('./lib/auth');
 const chat = require('./lib/chat');
 const { handle } = require('./lib/api');
+const render = require('./lib/render');
 const { serveStatic, fail } = require('./lib/http');
 const { seed, DEMO_PASSWORD } = require('./lib/seed');
 const site = require('./pond.config');
@@ -88,15 +89,58 @@ function clientIp(req) {
   return req.socket.remoteAddress || '0.0.0.0';
 }
 
+/**
+ * 站点对外的绝对地址，canonical / sitemap 都要用。
+ * 设了 POND_BASE_URL 就用它；否则从请求头里推，挂在反向代理后面也认得。
+ */
+function baseUrlOf(req) {
+  const fixed = String(process.env.POND_BASE_URL || '').trim();
+  if (fixed) return fixed.replace(/\/+$/, '');
+  const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() ||
+    (req.socket.encrypted ? 'https' : 'http');
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || (HOST + ':' + PORT))
+    .split(',')[0].trim();
+  return proto + '://' + host;
+}
+
+function sendText(res, status, body, type, extra) {
+  const buf = Buffer.from(body, 'utf8');
+  res.writeHead(status, Object.assign({
+    'Content-Type': type,
+    'Content-Length': buf.length,
+    'Cache-Control': 'no-cache',
+    'X-Content-Type-Options': 'nosniff'
+  }, extra || {}));
+  res.end(buf);
+}
+
 const server = http.createServer(async (req, res) => {
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
 
   const url = req.url || '/';
 
   if (!url.startsWith('/api/')) {
+    const rawPath = url.split('?')[0];
+
+    // 给爬虫的两份文件
+    if (rawPath === '/robots.txt') {
+      return sendText(res, 200, render.robotsTXT(baseUrlOf(req)), 'text/plain; charset=utf-8');
+    }
+    if (rawPath === '/sitemap.xml') {
+      return sendText(res, 200, render.sitemapXML(baseUrlOf(req)), 'application/xml; charset=utf-8');
+    }
+
+    // 有内容的页面：服务端先渲染一遍，爬虫拿到的就不是空壳了
+    const page = render.renderRoute(rawPath, config, baseUrlOf(req));
+    if (page) {
+      return sendText(res, page.status, page.html, 'text/html; charset=utf-8', {
+        'X-Robots-Tag': page.noindex ? 'noindex, follow' : 'index, follow'
+      });
+    }
+
     if (serveStatic(res, PUBLIC_DIR, url) !== false) return;
-    // 单页应用回退：无扩展名的路径一律交给前端路由
-    if (!path.extname(url.split('?')[0])) {
+    // 单页应用回退：无扩展名的路径一律交给前端路由（/chat、/basket 这些）
+    if (!path.extname(rawPath)) {
       if (serveStatic(res, PUBLIC_DIR, '/index.html') !== false) return;
     }
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });

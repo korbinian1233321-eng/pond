@@ -54,3 +54,28 @@ jobs:
           curl -sf 'http://127.0.0.1:3100/api/posts?limit=3' | head -c 200
           echo
           curl -sf 'http://127.0.0.1:3100/api/chat/messages?limit=3' | head -c 200
+
+      # 这一关专门盯「爬虫能不能看见」：
+      # 单页应用最容易的翻车方式是 HTML 里只剩一个空 <main>，测试全绿但站点搜不到。
+      - name: 确认爬虫能看见内容
+        run: |
+          POND_PORT=3100 POND_HOST=127.0.0.1 node --disable-warning=ExperimentalWarning server.js &
+          for i in $(seq 1 40); do
+            curl -sf http://127.0.0.1:3100/api/bootstrap > /dev/null && break
+            sleep 0.5
+          done
+
+          curl -sf http://127.0.0.1:3100/ | grep -q 'class="thread' \
+            || { echo "首页 HTML 里没有楼列表"; exit 1; }
+
+          POST=$(curl -sf 'http://127.0.0.1:3100/api/posts?limit=1' \
+            | grep -o '"id":"p_[^"]*"' | head -1 | cut -d'"' -f4)
+          echo "检查 /p/$POST"
+          curl -sf "http://127.0.0.1:3100/p/$POST" | grep -q 'class="post-h1"' \
+            || { echo "楼层页 HTML 里没有正文"; exit 1; }
+
+          curl -sf http://127.0.0.1:3100/sitemap.xml | grep -q '<urlset' \
+            || { echo "sitemap.xml 不对"; exit 1; }
+          curl -sf http://127.0.0.1:3100/robots.txt | grep -q '^Sitemap:' \
+            || { echo "robots.txt 里没有 Sitemap 行"; exit 1; }
+          echo "服务端渲染 OK"

@@ -211,10 +211,12 @@
   }
 
   /* ---------- 路由 ---------- */
-  function parseHash() {
-    var h = (location.hash || '').replace(/^#/, '');
-    if (!h || h === '/') return { view: 'home' };
-    var parts = h.split('/').filter(Boolean);
+  // 真实路径：/p/:id、/u/:id、/t/:tag。
+  // 这样每一层楼都是一个能被搜索到的独立网址，而不是同一个页面上的 #锚点。
+  // hash 路由只用来兼容老链接，进来会立刻换成真路径。
+  function parseRoute() {
+    var p = (location.pathname || '/').replace(/\/+$/, '') || '/';
+    var parts = p.split('/').filter(Boolean);
     var head = parts[0];
     if (head === 'p' && parts[1]) return { view: 'post', postId: decodeURIComponent(parts[1]) };
     if (head === 'u' && parts[1]) return { view: 'user', userId: decodeURIComponent(parts[1]) };
@@ -224,17 +226,33 @@
     if (head === 'chat') return { view: 'chat' };
     return { view: 'home' };
   }
-  function hashFor() {
-    if (S.view === 'post') return '#/p/' + encodeURIComponent(S.postId);
-    if (S.view === 'user') return '#/u/' + encodeURIComponent(S.userId);
-    if (S.view === 'basket') return '#/basket';
-    if (S.view === 'following') return '#/following';
-    if (S.view === 'chat') return '#/chat';
-    if (S.tag) return '#/t/' + encodeURIComponent(S.tag);
-    return '#/';
+
+  /** #/p/xxx → /p/xxx，只为了不把老链接弄丢 */
+  function legacyHashPath() {
+    var h = (location.hash || '').replace(/^#/, '');
+    if (!h || h === '/') return null;
+    var parts = h.split('/').filter(Boolean);
+    var head = parts[0];
+    var enc = function (v) { return encodeURIComponent(decodeURIComponent(v)); };
+    if (head === 'p' && parts[1]) return '/p/' + enc(parts[1]);
+    if (head === 'u' && parts[1]) return '/u/' + enc(parts[1]);
+    if (head === 't' && parts[1]) return '/t/' + enc(parts[1]);
+    if (head === 'basket') return '/basket';
+    if (head === 'following') return '/following';
+    if (head === 'chat') return '/chat';
+    return null;
   }
 
-  var suppressHash = false;
+  function pathFor() {
+    if (S.view === 'post') return '/p/' + encodeURIComponent(S.postId);
+    if (S.view === 'user') return '/u/' + encodeURIComponent(S.userId);
+    if (S.view === 'basket') return '/basket';
+    if (S.view === 'following') return '/following';
+    if (S.view === 'chat') return '/chat';
+    if (S.tag) return '/t/' + encodeURIComponent(S.tag);
+    return '/';
+  }
+
   function go(view, opts) {
     opts = opts || {};
     S.view = view;
@@ -245,13 +263,20 @@
     S.page = 1;
     S.list = null;
 
-    var h = hashFor();
-    if (location.hash !== h) {
-      suppressHash = true;
-      location.hash = h;
+    var to = pathFor();
+    if (location.pathname !== to) {
+      history.pushState({ pond: 1 }, '', to);
     }
     load();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // 服务端已经把这一页渲染好了，首次加载别再用骨架屏盖掉它
+  var hasPrerender = false;
+  function takePrerender() {
+    if (!hasPrerender) return false;
+    hasPrerender = false;
+    return true;
   }
 
   /* ---------- 加载 ---------- */
@@ -266,11 +291,15 @@
   function load() {
     S.loading = true;
     var main = $('#main');
+    // 首屏如果已经有服务端渲染好的内容，就别用骨架屏盖掉它
+    var keepPrerender = takePrerender();
     // 离开鱼汛就断开 SSE，把连接名额让出来
     if (S.view !== 'chat') chatClose();
 
     if (S.view === 'post') {
-      if (!S.post || S.post.id !== S.postId) main.innerHTML = skeleton(3);
+      if (!S.post || S.post.id !== S.postId) {
+        if (!keepPrerender) main.innerHTML = skeleton(3);
+      }
       return api('/posts/' + encodeURIComponent(S.postId)).then(function (d) {
         S.post = d.post;
         S.loading = false;
@@ -281,7 +310,7 @@
       });
     }
     if (S.view === 'user') {
-      if (!S.user) main.innerHTML = skeleton(2);
+      if (!S.user && !keepPrerender) main.innerHTML = skeleton(2);
       return api('/users/' + encodeURIComponent(S.userId)).then(function (d) {
         S.user = d.user;
         S.user.isMe = d.isMe;
@@ -320,7 +349,7 @@
       return chatLoad();
     }
     // home
-    if (!S.list) main.innerHTML = skeleton(4);
+    if (!S.list && !keepPrerender) main.innerHTML = skeleton(4);
     var qs = '?sort=' + encodeURIComponent(S.sort) + '&page=1';
     if (S.tag) qs += '&tag=' + encodeURIComponent(S.tag);
     if (S.q) qs += '&q=' + encodeURIComponent(S.q);
@@ -386,8 +415,21 @@
   /* ---------- 渲染：框架 ---------- */
   function applyBranding() {
     var c = S.config;
-    document.title = c.name;
     $('#brandText').innerHTML = esc(c.name) + '<em>' + esc(c.tagline) + '</em>';
+  }
+
+  /** 标题跟着视图走。爬虫看的是服务端那份，这里是给用户切页面时用的。 */
+  function setDocTitle() {
+    var name = (S.config && S.config.name) || 'Pond';
+    var t;
+    if (S.view === 'post' && S.post) t = S.post.title + ' · ' + name;
+    else if (S.view === 'user' && S.user) t = S.user.fishName + ' · ' + name;
+    else if (S.view === 'chat') t = '鱼汛 · ' + name;
+    else if (S.view === 'basket') t = '我的鱼篓 · ' + name;
+    else if (S.view === 'following') t = '关注的楼 · ' + name;
+    else if (S.tag) t = '塘口「' + S.tag + '」· ' + name;
+    else t = name + (S.config && S.config.tagline ? ' · ' + S.config.tagline : '');
+    if (document.title !== t) document.title = t;
   }
 
   function renderTopbar() {
@@ -423,8 +465,9 @@
     }).join('');
 
     $('#tagList').innerHTML = S.tags.map(function (t) {
-      return '<button class="tag-chip' + (S.tag === t.name ? ' on' : '') + '" data-act="tag" data-tag="' +
-        esc(t.name) + '">' + esc(t.name) + (t.count ? ' ' + t.count : '') + '</button>';
+      return '<a class="tag-chip' + (S.tag === t.name ? ' on' : '') + '" href="/t/' +
+        encodeURIComponent(t.name) + '" data-act="tag" data-tag="' +
+        esc(t.name) + '">' + esc(t.name) + (t.count ? ' ' + t.count : '') + '</a>';
     }).join('');
   }
 
@@ -480,7 +523,8 @@
   function threadRowHTML(p) {
     var a = p.author;
     var tags = p.tags.map(function (t) { return '<i>' + esc(t) + '</i>'; }).join('');
-    return '<button class="thread' + (p.pinned ? ' pinned' : '') + '" data-act="open-post" data-post="' + p.id + '">' +
+    return '<a class="thread' + (p.pinned ? ' pinned' : '') + '" href="/p/' + encodeURIComponent(p.id) +
+      '" data-act="open-post" data-post="' + p.id + '">' +
       avatarHTML(a, 38) +
       '<span class="thread-main">' +
       '<span class="thread-title">' + (p.pinned ? '<span class="pin-badge">置顶</span>' : '') + esc(p.title) + '</span>' +
@@ -494,7 +538,7 @@
       '<span class="thread-replies">' + ICON.bubble() + (p.floorCount + p.replyCount) + '</span>' +
       '<span class="thread-food">' + ICON.food() + p.food + '</span>' +
       '<span class="thread-last">最后 ' + timeAgo(p.lastReplyAt) + '</span>' +
-      '</span></button>';
+      '</span></a>';
   }
 
   function emptyHTML(title, sub) {
@@ -645,7 +689,7 @@
     var p = S.post;
     if (!p) return;
     var op = p.author;
-    var html = '<button class="back-link" data-act="back">' + ICON.back() + '回塘首页</button>';
+    var html = '<a class="back-link" href="/" data-act="back">' + ICON.back() + '回塘首页</a>';
     html += '<div class="thread-view">';
 
     html += '<div class="post-shell">' +
@@ -706,7 +750,7 @@
   function renderUser() {
     var u = S.user;
     if (!u) return;
-    var html = '<button class="back-link" data-act="back">' + ICON.back() + '回塘首页</button>';
+    var html = '<a class="back-link" href="/" data-act="back">' + ICON.back() + '回塘首页</a>';
     html += '<div class="profile-head">' + avatarHTML(u, 62) +
       '<div class="profile-main">' +
       '<div class="profile-name">' + esc(u.fishName) + (u.isMe ? '<span class="badge-op" style="margin-left:7px">你</span>' : '') + '</div>' +
@@ -1032,6 +1076,7 @@
     else if (S.view === 'following') renderFollowing();
     else if (S.view === 'chat') renderChat();
     else renderHome();
+    setDocTitle();
   }
 
   /* ---------- 登录 ---------- */
@@ -1361,6 +1406,9 @@
 
     var t = e.target.closest('[data-act]');
     if (!t) return;
+    // 这些现在是真的 <a href>：普通点击交给前端路由，
+    // 按住 Ctrl / Cmd / Shift 点（新标签页打开）就让浏览器自己处理
+    if (t.tagName === 'A' && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) e.preventDefault();
     var act = t.getAttribute('data-act');
 
     switch (act) {
@@ -1501,8 +1549,8 @@
       S.q = v.trim();
       if (S.view !== 'home') {
         S.view = 'home';
-        var h = hashFor();
-        if (location.hash !== h) { suppressHash = true; location.hash = h; }
+        var to = pathFor();
+        if (location.pathname !== to) history.pushState({ pond: 1 }, '', to);
       }
       S.page = 1;
       S.list = null;
@@ -1544,9 +1592,8 @@
     }
   });
 
-  window.addEventListener('hashchange', function () {
-    if (suppressHash) { suppressHash = false; return; }
-    var r = parseHash();
+  window.addEventListener('popstate', function () {
+    var r = parseRoute();
     S.view = r.view;
     S.postId = r.postId || null;
     S.userId = r.userId || null;
@@ -1562,13 +1609,20 @@
 
   /* ---------- 启动 ---------- */
   function boot() {
-    var r = parseHash();
+    // 老链接 /#/p/xxx 换成 /p/xxx
+    var legacy = legacyHashPath();
+    if (legacy) {
+      try { history.replaceState(null, '', legacy); } catch (e) { location.replace(legacy); return; }
+    }
+
+    var r = parseRoute();
     S.view = r.view;
     S.postId = r.postId || null;
     S.userId = r.userId || null;
     S.tag = r.tag || null;
 
-    $('#main').innerHTML = skeleton(4);
+    hasPrerender = !!document.querySelector('#main > *');
+    if (!hasPrerender) $('#main').innerHTML = skeleton(4);
     refreshBootstrap().then(load).catch(function (e) {
       $('#main').innerHTML = emptyHTML('连不上服务器', e.message || '');
     });
