@@ -13,6 +13,25 @@
 
 ---
 
+## [0.6.0] - 2026-10-30
+
+### 变更
+
+- **图片默认关闭。** `pond.config.js` 里 `images: false`，也可以用 `POND_IMAGES=1` / `0` 覆盖，不用改文件
+  - 关着时：`POST /api/upload` 返回 `403 images_disabled`，「图片」按钮不显示，粘贴和拖拽图片不响应
+  - 已经传上去的旧图仍然能显示——关的是「发新的」，不是「抹掉旧的」
+  - 代码没删，开关打开就全回来了
+
+### 为什么
+
+图片是社区运营成本的分水岭：磁盘、审核、外链失效、有人传不合适的东西。这些会在你还只有十个用户的时候找上门。文字社区先跑起来，等人真的来了再开。
+
+### 新增
+
+- 测试 41 → 44，新增 `test/images-off.test.js`（关着的时候上传被拒、配置如实下发给前端）
+
+---
+
 ## [0.5.0] - 2026-10-30
 
 「能贴图」版本。之前是纯文本社区，贴截图只能外链，而图床链接半年后会死。
@@ -142,7 +161,8 @@
 - 12 个接口测试
 - Docker / docker-compose 部署
 
-[Unreleased]: https://github.com/korbinian1233321-eng/pond/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/korbinian1233321-eng/pond/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.2.0...v0.3.0

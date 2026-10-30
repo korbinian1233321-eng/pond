@@ -20,6 +20,9 @@ process.env.POND_DB = DB_FILE;
 process.env.POND_DATA_DIR = DATA_DIR;
 process.env.POND_HOST = '127.0.0.1';
 process.env.POND_SEED_FORCE = '1';
+// 图片默认是关的（pond.config.js 里 images: false）。这个文件测的是「打开之后」的行为，
+// 「关着的时候」由 images-off.test.js 单独测。
+process.env.POND_IMAGES = '1';
 
 const { server } = require('../server.js');
 

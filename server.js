@@ -32,7 +32,9 @@ const config = {
   desc: process.env.POND_DESC || site.desc,
   rules: site.rules || [],
   tags: site.tags || [],
-  trust: site.trust || {}
+  trust: site.trust || {},
+  // 默认关。想开用 POND_IMAGES=1，或改 pond.config.js 里的 images
+  images: process.env.POND_IMAGES ? process.env.POND_IMAGES === '1' : site.images === true
 };
 
 /* ---------- 配置自检 ---------- */

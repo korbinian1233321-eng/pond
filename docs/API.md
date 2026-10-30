@@ -139,6 +139,8 @@
 
 ## 图片
 
+> **默认关闭。** `pond.config.js` 里 `images: false`，或用 `POND_IMAGES=1` 打开。关着时上传返回 `403 images_disabled`，前端也不显示入口。下面写的是打开之后的行为。
+
 ### `POST /api/upload`
 
 **请求体是图片原始字节，不是 JSON，也不是 multipart。** 前端直接 `fetch(file)`：
@@ -182,6 +184,7 @@ await fetch('/api/upload', {
 | 状态 | code | 什么时候 |
 |---|---|---|
 | 400 | `empty` | 没收到文件 |
+| 403 | `images_disabled` | 这个塘关了图片 |
 | 401 | `unauthorized` | 没登录 |
 | 413 | `payload_too_large` | 超过 5MB（看 `Content-Length`，不读满就拒） |
 | 415 | `bad_type` | 认不出是图片，或者是 SVG / PDF |

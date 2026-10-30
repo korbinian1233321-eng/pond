@@ -907,3 +907,6 @@ a.thread { color: inherit; }
   border-radius: 10px;
   min-height: 0;
 }
+
+/* 塘主关掉图片时，所有「图片」按钮消失（包括动态生成的回复框） */
+body.no-images [data-img-only] { display: none !important; }

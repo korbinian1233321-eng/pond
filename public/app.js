@@ -227,6 +227,7 @@
   /** 点按钮选图。同一个 input 复用，选完清空，不然选同一张不会再触发 change。 */
   function pickImage(onFile) {
     if (!S.me) return openAuth('login');
+    if (!S.config || S.config.images !== true) return toast('这个塘暂时不收图片', true);
     if (!fileInput) {
       fileInput = document.createElement('input');
       fileInput.type = 'file';
@@ -246,6 +247,7 @@
   /** 直接把文件当请求体发过去。不走 multipart——后端没有解析器，也不需要。 */
   function uploadImage(file, onDone) {
     if (!S.me) return openAuth('login');
+    if (!S.config || S.config.images !== true) return toast('这个塘暂时不收图片', true);
     if (!/^image\//.test(file.type)) return toast('只收图片', true);
     if (file.size > MAX_IMG) return toast('图片超过 5MB 了，压一下再传', true);
 
@@ -495,6 +497,9 @@
   function applyBranding() {
     var c = S.config;
     $('#brandText').innerHTML = esc(c.name) + '<em>' + esc(c.tagline) + '</em>';
+    // 塘主关了图片，就把所有「图片」按钮收起来。CSS 按 body 上的类隐藏，
+    // 这样动态生成的回复框按钮也一并生效，不用在每个渲染分支里判断。
+    document.body.classList.toggle('no-images', c.images !== true);
   }
 
   /** 标题跟着视图走。爬虫看的是服务端那份，这里是给用户切页面时用的。 */
@@ -717,7 +722,7 @@
       '<div class="reply-box-foot">' +
       (toId ? '<span class="to-hint">正在回复 <b>' + esc(toName) + '</b></span>' : '<span class="to-hint">直接盖楼</span>') +
       '<span class="spacer"></span>' +
-      '<button class="btn btn-sm btn-ghost" data-act="pick-image" data-target="replyText" title="贴图，也可以直接 Ctrl+V">图片</button>' +
+      '<button class="btn btn-sm btn-ghost" data-act="pick-image" data-target="replyText" data-img-only title="贴图，也可以直接 Ctrl+V">图片</button>' +
       '<button class="btn btn-sm btn-ghost" data-act="reply-cancel">取消</button>' +
       '<button class="btn btn-sm btn-primary" data-act="submit-reply" data-floor="' + floorId +
       '" data-to="' + (toId || '') + '">发出去</button>' +
@@ -818,7 +823,7 @@
         '<textarea id="replyTextMain" placeholder="' + (S.me ? '占一层楼，说点什么…' : '登录后就能盖楼') +
         '" data-floor="" data-to=""></textarea>' +
         '<div class="reply-box-foot"><span class="to-hint">Ctrl + Enter 直接发</span><span class="spacer"></span>' +
-        '<button class="btn btn-sm btn-ghost" data-act="pick-image" data-target="replyTextMain" title="贴图，也可以直接 Ctrl+V">图片</button>' +
+        '<button class="btn btn-sm btn-ghost" data-act="pick-image" data-target="replyTextMain" data-img-only title="贴图，也可以直接 Ctrl+V">图片</button>' +
         '<button class="btn btn-sm btn-primary" data-act="submit-reply" data-floor="" data-to="">占楼</button>' +
         '</div></div></div>';
     }
@@ -1685,6 +1690,7 @@
   document.addEventListener('paste', function (e) {
     var el = e.target;
     if (!el || el.tagName !== 'TEXTAREA' || !S.me) return;
+    if (!S.config || S.config.images !== true) return;
     var items = (e.clipboardData && e.clipboardData.items) || [];
     for (var i = 0; i < items.length; i++) {
       if (items[i].kind === 'file' && /^image\//.test(items[i].type)) {
@@ -1705,6 +1711,7 @@
   document.addEventListener('drop', function (e) {
     var el = e.target;
     if (!el || el.tagName !== 'TEXTAREA' || !S.me) return;
+    if (!S.config || S.config.images !== true) return;
     var files = (e.dataTransfer && e.dataTransfer.files) || [];
     for (var i = 0; i < files.length; i++) {
       if (takeImage(files[i], el)) {
