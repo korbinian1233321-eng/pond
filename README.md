@@ -220,6 +220,8 @@ POND_ADMIN=yourname node server.js
 
 ## 部署
 
+**要让中国大陆的人能打开，先读 [docs/DEPLOY.md](docs/DEPLOY.md)。** 机器放哪、为什么不能放大陆、为什么不能用 Vercel，那里讲清楚了。一句话版本：**中国香港 VPS，免备案，延迟 30–50ms**。
+
 ### Docker
 
 ```bash
@@ -234,26 +236,34 @@ docker run -d -p 3000:3000 -v pond-data:/data \
 
 ### systemd
 
-```ini
-[Unit]
-Description=Pond community
-After=network.target
+仓库里有一份收紧过权限的 [deploy/pond.service](deploy/pond.service)，直接装：
 
-[Service]
-Type=simple
-User=pond
-WorkingDirectory=/srv/pond
-Environment=POND_HOST=127.0.0.1 POND_PORT=3000 POND_DATA_DIR=/srv/pond/data
-ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server.js
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo cp deploy/pond.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now pond
 ```
 
-前面挂 Nginx / Caddy 反代到 `127.0.0.1:3000`，并设 `POND_SECURE_COOKIE=1`。
+它把整台机器对进程设成只读，只留 `/srv/pond/data` 可写。前面挂 Caddy 的话，[deploy/Caddyfile](deploy/Caddyfile) 也是现成的，自动申请证书。
 
-> 反向代理记得转发 `X-Forwarded-For`，否则限流会把所有请求算成同一个 IP。
+反代后面这几项必须设，少一项都出问题：
+
+```ini
+POND_HOST=0.0.0.0
+POND_BASE_URL=https://你的域名
+POND_SECURE_COOKIE=1
+POND_TRUST_PROXY=1
+```
+
+- `POND_TRUST_PROXY=1` 让应用采信 `X-Forwarded-For`。**不开**的话所有访客都被算成代理的 `127.0.0.1`，一个人刷快了全站被限流；**乱开**的话客户端自己填这个头就能伪造 IP 绕过限流。所以开了它，3000 端口就不能对公网开放——这两件事是绑在一起的。
+- `POND_SECURE_COOKIE=1` 让会话 Cookie 带上 `Secure`，不然会跟着明文请求发出去。
+
+上线后第一件事是改管理员口令：
+
+```bash
+node scripts/set-password.js 你的账号名
+```
+
+不给口令就随机生成一个，同时踢掉这个账号所有已登录会话。
 
 ### 备份
 
@@ -321,7 +331,14 @@ pond/
 │   └── app.js           # 前端逻辑（原生 JS，真路径 + History 路由）
 ├── test/
 │   ├── api.test.js      # 18 个接口测试
-│   └── seo.test.js      # 8 个服务端渲染 / 可收录性测试
+│   ├── seo.test.js      # 8 个服务端渲染 / 可收录性测试
+│   └── proxy.test.js    # 3 个反向代理信任测试（连同 proxy-trust.test.js）
+├── scripts/
+│   └── set-password.js  # 改口令 / 提管理员，没有邮箱时的兜底
+├── deploy/
+│   ├── pond.service     # systemd unit，权限已收紧
+│   └── Caddyfile        # 反代 + 自动 HTTPS，SSE 已配好不缓冲
+├── docs/DEPLOY.md       # 部署：机器放哪、为什么不能放大陆、微信会拦
 ├── docs/API.md          # 接口文档
 ├── .github/workflows/   # CI：Node 22 / 24 + 启动冒烟
 ├── CODE_OF_CONDUCT.md   # 行为准则（管仓库，不管你的池塘）
@@ -415,13 +432,15 @@ curl -X POST http://127.0.0.1:3000/api/chat/messages \
 npm test
 ```
 
-26 个用例，分两组。
+29 个用例，分三组。
 
 **接口（18 个）**：鉴权、信任等级、发帖、盖楼、楼中楼、投喂幂等、收藏、关注与通知、版主权限、404、Content-Type 校验、登出，以及鱼汛的六项（历史分页、未登录拦截、长度截断、`after` 增量、版主删除、**真的开一条 SSE 连接并收到广播**）。
 
 最后那条不是 mock：测试会 `fetch` 一个 `text/event-stream`，用 `ReadableStream` 一行行读，再让另一个账号发消息，断言事件确实到了。写完这个用例才敢说「实时是通的」。
 
 **服务端渲染（8 个）**：直接对原始 HTML 做字符串断言，不跑前端、不解析 DOM——因为要验的就是「不带 JS 能不能看见」。覆盖首页楼列表、楼层正文与结构化数据、塘口页与鱼档页、不存在的楼返回 404、`sitemap.xml` 和 `robots.txt`、`POND_BASE_URL` 覆盖域名，以及**发一条带 `<script>` 的帖子，断言它被转义成实体**。
+
+**反向代理信任（3 个）**：每次请求换一个伪造的 `X-Forwarded-For`，断言直连时仍然在第 91 次被限流（说明这个头被无视了），以及设了 `POND_TRUST_PROXY=1` 之后不同来源各自计数、同一来源照样被挡。这条盯的是「上线后限流还在不在」，不是功能。
 
 每个用例用独立临时数据库，跑完自动删除。
 
@@ -433,7 +452,7 @@ npm test
 - **SSE 连接绑在进程上**。多实例部署时，A 实例发的消息推不到 B 实例的客户端，得加 Redis pub/sub。单进程就没这个问题。
 - **`node:sqlite` 仍是实验特性**，Node 大版本升级时留意 API 变化。
 - **限流在内存里**，重启清零，多实例不共享。
-- **没有邮件**：不找回密码，不发验证邮件。注册即用。
+- **没有邮件**：不发验证邮件，自助找回密码做不到。忘了密码只能让有服务器权限的人跑 `node scripts/set-password.js 用户名` 重置——对自托管社区够用，但意味着「站长必须能登机器」。
 - **没有图片上传**：目前是纯文本社区。要加的话建议直接接对象存储，别把文件塞进 SQLite。
 - **聊天记录不会自动清理**。社区长期运行后 `chat_messages` 会一直长，需要的话自己加一条定时删除。
 

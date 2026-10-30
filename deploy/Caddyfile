@@ -1,0 +1,36 @@
+# Caddy 反向代理配置。Caddy 会自动申请并续期 Let's Encrypt 证书，
+# 不用自己跑 certbot，也不用写 80 端口的跳转。
+#
+# 用法：
+#   1. 把 yu.example.com 换成你的域名
+#   2. 域名 A 记录指向服务器 IP（先解析再生效，不然证书签不下来）
+#   3. sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   4. sudo systemctl reload caddy
+#
+# 换 Nginx 也行，但 SSE 那几行要自己补：proxy_buffering off、proxy_read_timeout 要够长。
+
+yu.example.com {
+	encode zstd gzip
+
+	# 鱼汛是 SSE 长连接，必须让事件立刻出去。
+	# Caddy 默认就 flush_interval -1，这里写出来是为了让后面接手的人知道不能改。
+	reverse_proxy 127.0.0.1:3000 {
+		flush_interval -1
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# 这几项应用自己也发，但反代这一层兜一道，防止哪天改漏了
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/pond.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

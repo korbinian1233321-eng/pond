@@ -37,6 +37,7 @@
 | 路径穿越 | 静态资源解析后校验前缀，越界返回 403 | `lib/http.js` |
 | 请求体炸弹 | 256KB 上限，超了直接断开 | `lib/http.js` |
 | 刷接口 | 按 IP 滑动窗口限流；鱼汛另有按账号的连接数上限 | `lib/http.js` / `lib/chat.js` |
+| 伪造来源 IP | `X-Forwarded-For` 默认不采信，只有 `POND_TRUST_PROXY=1` 才读——否则客户端自己填这个头就能换着 IP 绕过所有限流 | `server.js` |
 | SQL 注入 | 全部走 `prepare` 占位符，没有字符串拼接用户输入 | `lib/api.js` |
 | 越权 | 每个写接口都过 `needAuth()` / `needMod()` | `lib/api.js` |
 
@@ -46,9 +47,13 @@
 
 - [ ] 前面挂了 HTTPS 反代，并设了 `POND_SECURE_COOKIE=1`
 - [ ] 删掉了 `data/` 目录，用 `POND_NO_SEED=1` 启动（否则示例账号 `admin / pond1234` 会留在生产环境）
-- [ ] 反代转发了 `X-Forwarded-For`，否则限流会把所有请求算成同一个 IP
+- [ ] 反代后面设了 `POND_TRUST_PROXY=1`，**并且**用防火墙挡住了 3000 端口
 - [ ] 数据库文件不在 Web 根目录下（默认在 `data/`，本来就不对外）
 - [ ] 定期备份 `pond.db`
+
+最后两条容易踩：`POND_TRUST_PROXY` 和防火墙必须一起做。只开信任不开防火墙，客户端可以直接连 3000 端口伪造 `X-Forwarded-For`，限流全废；只开防火墙不开信任，所有访客被算成 `127.0.0.1`，一个人能把全站限流掉。
+
+启动日志会把这几种配置问题打出来，看到 `⚠` 就说明 `.env` 还没配好。
 
 ## 支持范围
 

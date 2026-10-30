@@ -13,6 +13,30 @@
 
 ---
 
+## [0.4.0] - 2026-10-30
+
+「能上线」版本。补的是从「本机能跑」到「公网上不出事」之间缺的那几块。
+
+### 安全
+
+- **`X-Forwarded-For` 不再无条件采信**：以前任何客户端只要自己填这个头，就能每次换一个假 IP，把所有按 IP 的限流（含登录爆破防护）全部绕过。现在默认只认 socket 地址，确实挂在反代后面才设 `POND_TRUST_PROXY=1`
+- 启动时自检部署配置：对外监听但缺 `POND_TRUST_PROXY` / `POND_SECURE_COOKIE` / `POND_BASE_URL`，或示例账号的公开口令还在，都会打出 `⚠`
+
+### 新增
+
+- **`scripts/set-password.js`**：改口令 / 提管理员 / 列账号。没给口令就随机生成，改完踢掉该账号所有会话。给「没有邮箱、忘了就没了」兜底
+- **`deploy/pond.service`**：systemd unit，`ProtectSystem=strict` + 只放开 `data/` 可写
+- **`deploy/Caddyfile`**：反代 + 自动 HTTPS，`flush_interval -1` 保证 SSE 不缓冲
+- **`docs/DEPLOY.md`**：机器放哪（为什么不能放大陆）、域名实名、防火墙、备份、微信拦截的现实
+- 测试 26 → 29，新增 `test/proxy.test.js` / `test/proxy-trust.test.js`
+
+### 变更
+
+- README 部署章节重写，指向 `docs/DEPLOY.md` 和 `deploy/` 里的现成配置
+- `.env.example` 补 `POND_TRUST_PROXY`
+
+---
+
 ## [0.3.0] - 2026-10-30
 
 「让爬虫看得见」版本。之前整个站是一个空壳 HTML，爬虫抓到的内容为零，每一层楼都搜不到。
@@ -94,7 +118,8 @@
 - 12 个接口测试
 - Docker / docker-compose 部署
 
-[Unreleased]: https://github.com/korbinian1233321-eng/pond/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/korbinian1233321-eng/pond/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/korbinian1233321-eng/pond/releases/tag/v0.1.0

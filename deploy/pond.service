@@ -1,0 +1,38 @@
+[Unit]
+Description=Pond 社区
+Documentation=https://github.com/korbinian1233321-eng/pond
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pond
+Group=pond
+WorkingDirectory=/srv/pond
+EnvironmentFile=/srv/pond/.env
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server.js
+Restart=always
+RestartSec=3
+
+# 停服务时先发 SIGTERM 让 SSE 连接正常断开，别让客户端一直等
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+# --- 收权限 ---
+# 整台机器对进程只读，只有 data/ 可写。SQLite 的 WAL 文件也落在这里。
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/srv/pond/data
+
+# 只需要 IPv4/IPv6 的 TCP
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

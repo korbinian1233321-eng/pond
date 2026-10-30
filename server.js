@@ -83,9 +83,20 @@ const SECURITY_HEADERS = {
     "script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'"
 };
 
+/**
+ * 取客户端 IP，用于限流和聊天室连接数上限。
+ *
+ * 默认只认 socket 地址。直连公网时 X-Forwarded-For 是客户端自己写的头，
+ * 谁都能填一个假 IP，换着填就绕过了所有按 IP 的限流——包括登录爆破。
+ * 只有确实挂在反向代理后面（Caddy / Nginx / Cloudflare）才设 POND_TRUST_PROXY=1。
+ */
+const TRUST_PROXY = process.env.POND_TRUST_PROXY === '1';
+
 function clientIp(req) {
-  const fwd = req.headers['x-forwarded-for'];
-  if (fwd) return String(fwd).split(',')[0].trim();
+  if (TRUST_PROXY) {
+    const fwd = req.headers['x-forwarded-for'];
+    if (fwd) return String(fwd).split(',')[0].trim();
+  }
   return req.socket.remoteAddress || '0.0.0.0';
 }
 
@@ -194,7 +205,44 @@ if (require.main === module) {
       console.log(`  管理员账号：${adminResult.username}`);
       console.log('');
     }
+
+    for (const w of deployWarnings()) console.log(`  ⚠ ${w}\n`);
+    const note = deployNote();
+    if (note) console.log(`  ${note}\n`);
   });
+}
+
+/**
+ * 上线前的自检。不阻止启动——本地开发不该被这些噪音挡住——
+ * 但挂在 0.0.0.0 上就必须说清楚哪几项还是默认值。
+ */
+function deployWarnings() {
+  const out = [];
+  const exposed = HOST !== '127.0.0.1' && HOST !== 'localhost';
+
+  if (exposed && !TRUST_PROXY) {
+    out.push('对外监听但没设 POND_TRUST_PROXY=1。如果前面有反向代理，所有访客会被算成同一个 IP，\n     限流会互相拖累（一个人刷快了，全站被挡）。如果没反代，可以忽略这条。');
+  }
+  if (exposed && process.env.POND_SECURE_COOKIE !== '1') {
+    out.push('对外监听但没设 POND_SECURE_COOKIE=1。走 HTTPS 时务必打开，否则会话 Cookie 会跟着明文请求发出去。');
+  }
+  if (exposed && !process.env.POND_BASE_URL) {
+    out.push('没设 POND_BASE_URL。canonical 和 sitemap 会从 Host 头推，搜索引擎可能收到不一致的网址。');
+  }
+  if (exposed && seedResult.seeded) {
+    out.push(`示例数据里的 admin / ${DEMO_PASSWORD} 是公开密码，任何人都能登进去当管理员。\n     上线前用 node scripts/set-password.js admin 改掉，或者删掉 data/ 用 POND_NO_SEED=1 重来。`);
+  }
+  return out;
+}
+
+/**
+ * 配置正确时的一句确认。不是警告——真警告见上。
+ * 这里只提醒一件应用自己看不到、但必须成立的事：端口没对公网开着。
+ */
+function deployNote() {
+  const exposed = HOST !== '127.0.0.1' && HOST !== 'localhost';
+  if (!exposed || !TRUST_PROXY) return null;
+  return `反代模式：已信任 X-Forwarded-For，${PORT} 端口不能对公网开放（否则可伪造来源 IP 绕过限流）。`;
 }
 
 function shutdown() {

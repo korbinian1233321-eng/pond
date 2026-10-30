@@ -1,6 +1,6 @@
 {
   "name": "pond",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "零依赖的自托管社区引擎：塘 + 楼层 + 实时聊天。一个 node server.js 就能跑。",
   "main": "server.js",
   "type": "commonjs",
@@ -11,7 +11,8 @@
     "start": "node --disable-warning=ExperimentalWarning server.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
     "test": "node --disable-warning=ExperimentalWarning --test",
-    "test:watch": "node --disable-warning=ExperimentalWarning --test --watch"
+    "test:watch": "node --disable-warning=ExperimentalWarning --test --watch",
+    "set-password": "node --disable-warning=ExperimentalWarning scripts/set-password.js"
   },
   "files": [
     "server.js",
@@ -20,7 +21,10 @@
     "public/",
     "docs/API.md",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "scripts/",
+    "deploy/",
+    "docs/DEPLOY.md"
   ],
   "keywords": [
     "forum",
