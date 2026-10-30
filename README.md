@@ -324,6 +324,9 @@ pond/
 │   └── seo.test.js      # 8 个服务端渲染 / 可收录性测试
 ├── docs/API.md          # 接口文档
 ├── .github/workflows/   # CI：Node 22 / 24 + 启动冒烟
+├── CODE_OF_CONDUCT.md   # 行为准则（管仓库，不管你的池塘）
+├── CONTRIBUTING.md      # 贡献指南
+├── SECURITY.md          # 安全模型与部署检查清单
 ├── Dockerfile
 └── docker-compose.yml
 ```
@@ -454,6 +457,8 @@ npm test
 见 [CONTRIBUTING.md](CONTRIBUTING.md)。欢迎 issue，尤其欢迎「你为什么要这么设计」这类质疑。
 
 发现安全问题时请不要开公开 issue，流程写在 [SECURITY.md](SECURITY.md)。
+
+在这个仓库里说话，请遵守 [行为准则](CODE_OF_CONDUCT.md)。
 
 ## 许可
 
