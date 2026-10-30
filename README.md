@@ -277,6 +277,17 @@ node scripts/add-user.js ajin --fish 青柠气泡
 
 **要让中国大陆的人能打开，先读 [docs/DEPLOY.md](docs/DEPLOY.md)。** 机器放哪、为什么不能放大陆、为什么不能用 Vercel，那里讲清楚了。一句话版本：**中国香港 VPS，免备案，延迟 30–50ms**。
 
+### 一分钱不花
+
+不想买机器，用 Oracle Cloud 的永久免费额度——`VM.Standard.E2.1.Micro`（1 核 1G）就够跑，东京或首尔离国内 60–100ms：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/korbinian1233321-eng/pond/main/deploy/oracle/install.sh -o install.sh
+sudo bash install.sh --admin 你的账号名 --domain yu.example.com   # 没域名就去掉 --domain
+```
+
+脚本把 Node、代码、systemd、防火墙、Caddy、每日备份一次装完，可重复跑。注册要一张信用卡做验证（不扣钱），详见 [docs/DEPLOY.md](docs/DEPLOY.md) 的「一·B」。
+
 ### Docker
 
 ```bash
@@ -396,10 +407,12 @@ pond/
 ├── scripts/
 │   ├── set-password.js  # 改口令 / 提管理员，没有邮箱时的兜底
 │   ├── invite.js        # 在服务器上发码 / 看码 / 撤码
-│   └── add-user.js      # registration: 'closed' 时唯一的建号入口
+│   ├── add-user.js      # registration: 'closed' 时唯一的建号入口
+│   └── backup.js        # 备份数据库和图片，留最近 7 份
 ├── deploy/
 │   ├── pond.service     # systemd unit，权限已收紧
-│   └── Caddyfile        # 反代 + 自动 HTTPS，SSE 已配好不缓冲
+│   ├── Caddyfile        # 反代 + 自动 HTTPS，SSE 已配好不缓冲
+│   └── oracle/install.sh # Oracle 免费机一键安装（Node + 服务 + 防火墙 + 备份）
 ├── docs/DEPLOY.md       # 部署：机器放哪、为什么不能放大陆、微信会拦
 ├── docs/API.md          # 接口文档
 ├── .github/workflows/   # CI：Node 22 / 24 + 启动冒烟

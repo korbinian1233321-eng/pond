@@ -1,6 +1,7 @@
 # 依赖与产物
 node_modules/
 data/
+backup/
 *.db
 *.db-wal
 *.db-shm

@@ -13,6 +13,26 @@
 
 ---
 
+## [0.7.1] - 2026-10-30
+
+「一分钱不花」版本。之前只讲了买香港 VPS，但很多人只是想先跑起来看看。
+
+### 新增
+
+- **`deploy/oracle/install.sh`**：Oracle Cloud 免费机一键安装。装 Node 22 → 建 `pond` 用户 → 拉代码到 `/srv/pond` → 写 `.env` → 装 systemd → 放行 iptables →（有 `--domain` 时）装 Caddy 签证书 → 每天 4:17 自动备份。可重复跑，不会覆盖已有 `.env`
+- **`scripts/backup.js`**：用 `VACUUM INTO` 拿一致性快照，不用停服务；数据库和 `uploads/` 各留最近 7 份
+- `docs/DEPLOY.md` 新增「一·B、一分钱不花：Oracle 永久免费机」，含额度现状、开机步骤、以及脚本改不了的那一步（云上安全列表）
+
+### 变更
+
+- 加 `--domain` 重跑时，脚本会把 `POND_HOST` / `POND_BASE_URL` / `POND_TRUST_PROXY` / `POND_SECURE_COOKIE` 四项改成反代模式。不改的话，Caddy 转进来的请求会被算成同一个 IP，限流互相拖累
+
+### 为什么是 x86 Micro 不是 ARM
+
+网上教程都教人抢「4 核 24G 的 Ampere A1」，那是「Out of host capacity」刷屏的根源，而且 2026 年 9 月起配额已砍到 2 核 12G。`VM.Standard.E2.1.Micro`（1 核 1G）基本随开随有，Pond 占几十兆内存，够用。
+
+---
+
 ## [0.7.0] - 2026-10-30
 
 「请柬」版本。之前的塘谁都能注册，实际跑起来第一周就会有一半账号是机器。

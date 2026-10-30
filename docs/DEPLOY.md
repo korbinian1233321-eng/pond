@@ -13,6 +13,7 @@
 | 中国大陆 | **必须 ICP 备案** | 10–30ms | **走不通**，见下 |
 | 中国香港 | 不需要 | 30–50ms | **推荐** |
 | 新加坡 / 日本 | 不需要 | 60–100ms | 可以，比香港慢一档 |
+| Oracle 免费机（东京/首尔） | 不需要 | 60–100ms | **一分钱不花**，见一·B |
 | 美西 / 欧洲 | 不需要 | 150–250ms | 能开但明显卡，晚高峰更差 |
 | Vercel / Netlify / Railway | — | — | **跑不了**，见下 |
 
@@ -46,6 +47,79 @@ Pond 有三件事跟 serverless 天然冲突：
 2 核 2G 对一个小社区绰绰有余——Pond 单进程、内存占用几十 MB，瓶颈在带宽不在 CPU。
 
 **域名**：在阿里云 / 腾讯云注册后要做**实名认证**，1–3 天。这跟备案是两件事，免备案不等于免实名。想快就先用 IP 访问，域名下来再切。
+
+---
+
+## 一·B、一分钱不花：Oracle 永久免费机
+
+不想买机器的话，Oracle Cloud 的 Always Free 是唯一真·永久免费的选项（AWS / Azure / GCP 的免费期都是 12 个月，或者只有几个美国区）。Pond 的「一个进程 + 一个 SQLite 文件」正好吃得住最小配置。
+
+### 能白拿多少
+
+| 资源 | 额度 |
+|---|---|
+| `VM.Standard.E2.1.Micro`（AMD） | **2 台**，1 核 1G |
+| `VM.Standard.A1.Flex`（ARM） | 合计 2 核 12G（2026 年 9 月从 4 核 24G 砍下来的） |
+| 块存储 | 200 GB |
+| 出站流量 | 每月 10 TB |
+
+**别去抢 ARM。** 网上教程全是「4 核 24G 的 Ampere」，这就是「Out of host capacity」刷屏的来源——现在配额还砍半了。那台 **1 核 1G 的 x86 Micro 基本随开随有**，而 Pond 跑起来只占几十兆内存，完全够。
+
+### 代价
+
+- 注册要手机号 + 信用卡。官方明说：**不主动升级就不会扣款**。
+- 开机时选的**主区域不能改**，而且免费实例只能建在主区域。所以选之前想清楚：日本东部（东京）或韩国首尔离国内最近，南韩春川（Chuncheon）没有 ARM。
+- 闲置回收：7 天内 CPU / 网络持续低于 20% 可能被收走。有真实访问就不会触发，纯放着不管的新站有这个风险。
+
+### 开机器
+
+1. 注册，主区域选 **Japan East (Tokyo)** 或 **South Korea Central (Seoul)**
+2. 创建实例 → 镜像选 **Canonical Ubuntu 24.04**（不要选 Oracle Linux，下面的脚本是给 Ubuntu 写的）
+3. Shape 选 **VM.Standard.E2.1.Micro**（AMD），1 核 1G
+4. 下载 SSH 私钥，记下公网 IP
+5. SSH 进去，跑一条命令
+
+```bash
+# 有域名
+curl -fsSL https://raw.githubusercontent.com/korbinian1233321-eng/pond/main/deploy/oracle/install.sh -o install.sh
+sudo bash install.sh --admin 你的账号名 --domain yu.example.com
+
+# 没域名，先用 IP 访问
+sudo bash install.sh --admin 你的账号名
+```
+
+脚本干这些：装 Node 22 → 建 `pond` 用户 → 拉代码到 `/srv/pond` → 写 `.env` → 装 systemd → 放行 iptables → （有域名时）装 Caddy 签证书 → 每天 4:17 自动备份。
+
+可以重复跑：更新代码、重装服务，但不会覆盖已有的 `.env`（加 `--domain` 重跑时，会帮你把反代相关的四项改成正确值）。
+
+### 脚本改不了的那一步
+
+**Oracle 控制台 → 实例 → 子网 → 安全列表 → 添加入站规则**，放行 TCP 80/443（或 3000）。
+
+机器自己的 iptables 脚本放行了，云上这一层放行不了——这是新手最常卡住的地方，症状是浏览器一直转圈，看起来像服务没起来，其实请求根本没到机器。
+
+### 然后
+
+用 `--admin` 那个账号注册（不需要邀请码，注册完就是管理员），然后发第一个码：
+
+```bash
+cd /srv/pond
+sudo -u pond node scripts/invite.js new --note "给第一个朋友"
+```
+
+### 没有域名怎么上 HTTPS
+
+先用 IP + HTTP 跑起来，自己人小范围用没问题，但**密码和邀请码是明文传输的**，别当长期方案。
+
+想零成本解决，去申请一个免费二级域名（`dpdns.org`、`nic.eu.org` 这些，人工审核、永久免费），A 记录指到机器 IP，然后重跑一次脚本：
+
+```bash
+sudo bash install.sh --admin 你的账号名 --domain 你的免费域名
+```
+
+Caddy 会自动签证书并续期。
+
+> Let's Encrypt 从 2026 年 1 月起支持**给 IP 地址签证书**了，理论上不买域名也能有 HTTPS。但那套证书只有 6 天有效期、必须走 `shortlived` profile，Caddy 对 IP 默认只用自己的内部 CA，配起来比申请个免费域名还麻烦。想折腾的话自己接 certbot，我不推荐把它当作第一步。
 
 ---
 
