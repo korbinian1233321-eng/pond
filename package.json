@@ -1,6 +1,6 @@
 {
   "name": "pond",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "零依赖的自托管社区引擎：塘 + 楼层 + 实时聊天。一个 node server.js 就能跑。",
   "main": "server.js",
   "type": "commonjs",

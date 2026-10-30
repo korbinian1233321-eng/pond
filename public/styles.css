@@ -882,3 +882,28 @@ a.thread { color: inherit; }
 }
 .ssr-note strong { color: var(--ink-2); font-weight: 650; }
 .ssr-note a { color: var(--accent); }
+
+/* ---------- 图 ---------- */
+.post-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 10px 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  /* 图还没加载出来时先占一块淡底，页面不会突然往下一跳 */
+  min-height: 60px;
+}
+.post-img:first-child { margin-top: 2px; }
+.post-img:last-child { margin-bottom: 2px; }
+
+/* 聊天里的图别撑满整屏 */
+.chat-body .post-img,
+.chat-text .post-img {
+  max-height: 240px;
+  max-width: 100%;
+  margin: 6px 0;
+  border-radius: 10px;
+  min-height: 0;
+}

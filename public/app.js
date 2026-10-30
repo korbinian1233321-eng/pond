@@ -83,11 +83,20 @@
     var s = String(t || '').replace(/\s+/g, ' ').trim();
     return s.length > n ? s.slice(0, n) + '…' : s;
   }
+  /* ---------- 图片 ---------- */
+  // 只认自己上传的图。允许外链的话，别人贴一个第三方 URL 就能拿到每个读者的 IP，
+  // 而且那个图床半年后大概率会死。
+  var IMG_RE = /!\[([^\]]{0,120})\]\((\/uploads\/f_[a-z0-9]+\.(?:png|jpg|gif|webp))\)/g;
+  function imgTag(m, alt, src) {
+    return '<img class="post-img" src="' + src + '" alt="' + alt + '" loading="lazy" decoding="async">';
+  }
+
   function formatBody(text) {
     return String(text).split(/\n{2,}/).map(function (p) {
       var t = esc(p)
         .replace(/`([^`]+)`/g, '<span class="code">$1</span>')
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(IMG_RE, imgTag)
         .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer nofollow">$1</a>');
       return '<p>' + t.replace(/\n/g, '<br>') + '</p>';
     }).join('');
@@ -97,6 +106,7 @@
     return esc(text)
       .replace(/`([^`]+)`/g, '<span class="code">$1</span>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(IMG_RE, imgTag)
       .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer nofollow">$1</a>')
       .replace(/\n/g, '<br>');
   }
@@ -208,6 +218,75 @@
   }
   function toastErr(e) {
     toast((e && e.message) || '出了点问题', true);
+  }
+
+  /* ---------- 传图 ---------- */
+  var MAX_IMG = 5 * 1024 * 1024;
+  var fileInput = null;
+
+  /** 点按钮选图。同一个 input 复用，选完清空，不然选同一张不会再触发 change。 */
+  function pickImage(onFile) {
+    if (!S.me) return openAuth('login');
+    if (!fileInput) {
+      fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/png,image/jpeg,image/gif,image/webp';
+      fileInput.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px';
+      document.body.appendChild(fileInput);
+      fileInput.addEventListener('change', function () {
+        var f = fileInput.files && fileInput.files[0];
+        fileInput.value = '';
+        if (f && fileInput._onFile) fileInput._onFile(f);
+      });
+    }
+    fileInput._onFile = onFile;
+    fileInput.click();
+  }
+
+  /** 直接把文件当请求体发过去。不走 multipart——后端没有解析器，也不需要。 */
+  function uploadImage(file, onDone) {
+    if (!S.me) return openAuth('login');
+    if (!/^image\//.test(file.type)) return toast('只收图片', true);
+    if (file.size > MAX_IMG) return toast('图片超过 5MB 了，压一下再传', true);
+
+    toast('正在传…');
+    fetch(API + '/upload', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': file.type },
+      body: file
+    }).then(function (res) {
+      return res.json().catch(function () {
+        return { ok: false, error: { message: '服务器返回了看不懂的东西' } };
+      }).then(function (json) {
+        if (!res.ok || !json.ok) throw new ApiError(json.error, res.status);
+        return json.data;
+      });
+    }).then(function (d) {
+      toast('图传上去了');
+      onDone(d);
+    }).catch(function (e) {
+      toastErr(e);
+      if (e && e.status === 401) openAuth('login');
+    });
+  }
+
+  /** 在光标处插文本，插完把光标放到后面 */
+  function insertAt(el, text) {
+    if (!el) return;
+    var start = el.selectionStart == null ? el.value.length : el.selectionStart;
+    var end = el.selectionEnd == null ? el.value.length : el.selectionEnd;
+    el.value = el.value.slice(0, start) + text + el.value.slice(end);
+    var pos = start + text.length;
+    el.selectionStart = el.selectionEnd = pos;
+    el.focus();
+  }
+
+  /** 从剪贴板 / 拖进来的文件里挑第一张图，传完插到光标处 */
+  function takeImage(file, el) {
+    if (!file || !/^image\//.test(file.type)) return false;
+    uploadImage(file, function (d) { insertAt(el, '![](' + d.url + ')'); });
+    return true;
   }
 
   /* ---------- 路由 ---------- */
@@ -638,6 +717,7 @@
       '<div class="reply-box-foot">' +
       (toId ? '<span class="to-hint">正在回复 <b>' + esc(toName) + '</b></span>' : '<span class="to-hint">直接盖楼</span>') +
       '<span class="spacer"></span>' +
+      '<button class="btn btn-sm btn-ghost" data-act="pick-image" data-target="replyText" title="贴图，也可以直接 Ctrl+V">图片</button>' +
       '<button class="btn btn-sm btn-ghost" data-act="reply-cancel">取消</button>' +
       '<button class="btn btn-sm btn-primary" data-act="submit-reply" data-floor="' + floorId +
       '" data-to="' + (toId || '') + '">发出去</button>' +
@@ -738,6 +818,7 @@
         '<textarea id="replyTextMain" placeholder="' + (S.me ? '占一层楼，说点什么…' : '登录后就能盖楼') +
         '" data-floor="" data-to=""></textarea>' +
         '<div class="reply-box-foot"><span class="to-hint">Ctrl + Enter 直接发</span><span class="spacer"></span>' +
+        '<button class="btn btn-sm btn-ghost" data-act="pick-image" data-target="replyTextMain" title="贴图，也可以直接 Ctrl+V">图片</button>' +
         '<button class="btn btn-sm btn-primary" data-act="submit-reply" data-floor="" data-to="">占楼</button>' +
         '</div></div></div>';
     }
@@ -1463,6 +1544,13 @@
         return follow(t.getAttribute('data-user'));
       case 'pond-join':
         return joinPond();
+      case 'pick-image': {
+        var target = $('#' + t.getAttribute('data-target'));
+        pickImage(function (f) {
+          uploadImage(f, function (d) { insertAt(target, '![](' + d.url + ')'); });
+        });
+        return;
+      }
       case 'reply-open':
         if (!S.me) return openAuth('login');
         S.replying = {
@@ -1589,6 +1677,40 @@
       submitReply(e.target.getAttribute('data-floor') || '', e.target.getAttribute('data-to') || '');
     } else if (id === 'postBody' || id === 'postTitle' || id === 'postQuote') {
       publish();
+    }
+  });
+
+  /* ---------- 贴图：剪贴板 / 拖进来 ---------- */
+  // 截图之后 Ctrl+V 是发图最顺手的路径，比点按钮快得多。
+  document.addEventListener('paste', function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'TEXTAREA' || !S.me) return;
+    var items = (e.clipboardData && e.clipboardData.items) || [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file' && /^image\//.test(items[i].type)) {
+        var f = items[i].getAsFile();
+        if (f) {
+          e.preventDefault();
+          takeImage(f, el);
+        }
+        return;
+      }
+    }
+  });
+
+  document.addEventListener('dragover', function (e) {
+    if (e.target && e.target.tagName === 'TEXTAREA') e.preventDefault();
+  });
+
+  document.addEventListener('drop', function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'TEXTAREA' || !S.me) return;
+    var files = (e.dataTransfer && e.dataTransfer.files) || [];
+    for (var i = 0; i < files.length; i++) {
+      if (takeImage(files[i], el)) {
+        e.preventDefault();
+        return;
+      }
     }
   });
 

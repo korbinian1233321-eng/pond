@@ -11,9 +11,9 @@
 
 **鉴权**：登录成功后服务端下发 `pond_sid`（HttpOnly + SameSite=Lax）。之后同源请求自动携带。
 
-**写操作**必须带 `Content-Type: application/json`，否则返回 `415`。
+**写操作**必须带 `Content-Type: application/json`，否则返回 `415`。唯一的例外是 `POST /api/upload`——那边收的是图片原始字节。
 
-**限流**：按 IP，写 90 次/分钟、读 600 次/分钟，超出返回 `429`。
+**限流**：按 IP，写 90 次/分钟、读 600 次/分钟，超出返回 `429`。上传另外按人限 20 次/分钟。
 
 ---
 
@@ -29,6 +29,7 @@
 | `/t/:tag` | 塘口页：该标签下所有楼 | |
 | `/sitemap.xml` | 全站网址 | 首页 + 塘口 + 楼层 + 鱼档，带 `lastmod` |
 | `/robots.txt` | 放行正文，挡住 `/api/`、`/chat`、`/basket`、`/following` | |
+| `/uploads/:file` | 用户上传的图片 | 文件名由服务端生成，形状不对直接 404；`Cache-Control: immutable` |
 | `/chat` `/basket` `/following` | 单页外壳 | 都要登录/实时连接，没有收录价值 |
 
 页面里用到的数据仍然是上面这些接口的数据，只是换了种输出格式。想要 JSON 就去 `/api/*`。
@@ -133,6 +134,62 @@
 | GET | `/api/following` | — | 关注的楼（需登录） |
 
 `/api/vote` 返回 `{ voted, count }`，可以直接用来更新按钮，不需要重新拉帖子。
+
+---
+
+## 图片
+
+### `POST /api/upload`
+
+**请求体是图片原始字节，不是 JSON，也不是 multipart。** 前端直接 `fetch(file)`：
+
+```js
+await fetch('/api/upload', {
+  method: 'POST',
+  headers: { 'Content-Type': file.type },
+  body: file
+});
+```
+
+| 限制 | 值 |
+|---|---|
+| 格式 | PNG / JPG / GIF / WebP（**不收 SVG**） |
+| 单张大小 | 5MB |
+| 每人总量 | 300 张 |
+| 频率 | 20 次/分钟 |
+
+格式按**文件头魔数**判断，`Content-Type` 和扩展名都不作数。把 `.php` 改名成 `.png` 传上来返回 `415`。
+
+```json
+{
+  "ok": true,
+  "data": {
+    "id": "f_m1k2j3a4b5c6",
+    "url": "/uploads/f_m1k2j3a4b5c6.png",
+    "width": 1440,
+    "height": 900,
+    "bytes": 183422
+  }
+}
+```
+
+宽高是从文件头里读的，读不出来给 `null`（不影响使用，只是前端少两个属性）。
+
+拿到 `url` 之后，把 `![](/uploads/xxx.png)` 写进正文就行。只认站内 `/uploads/` 开头的图，外链一律当普通文字处理。
+
+**错误**
+
+| 状态 | code | 什么时候 |
+|---|---|---|
+| 400 | `empty` | 没收到文件 |
+| 401 | `unauthorized` | 没登录 |
+| 413 | `payload_too_large` | 超过 5MB（看 `Content-Length`，不读满就拒） |
+| 415 | `bad_type` | 认不出是图片，或者是 SVG / PDF |
+| 429 | `quota` / `rate_limited` | 存满了 / 传太快 |
+
+### `DELETE /api/uploads/:id`
+
+删掉一张自己传的图（版主可以删任何人的）。需要 `Content-Type: application/json`。数据库记录和磁盘文件一起删，再取那个 URL 会 404。
 
 ---
 

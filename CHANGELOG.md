@@ -6,10 +6,34 @@
 
 ### 计划中
 
-- 图片 / 附件（对象存储）
+- 图片转码 / 缩略图
 - 全文搜索（SQLite FTS5）
 - 举报处理页（接口已有，前端只做了提交）
 - 用户主页可编辑（接口已有，前端没入口）
+
+---
+
+## [0.5.0] - 2026-10-30
+
+「能贴图」版本。之前是纯文本社区，贴截图只能外链，而图床链接半年后会死。
+
+### 新增
+
+- **图片上传**：截图后 `Ctrl+V` 直接粘贴、拖进输入框、或点「图片」按钮选文件
+  - `POST /api/upload` 收原始字节（不是 multipart——内置模块没有解析器，手写一个比 `fetch(file)` 更容易出错）
+  - `GET /uploads/:file` 对外提供，`Cache-Control: immutable`（文件名带随机 id，内容永不改变）
+  - `DELETE /api/uploads/:id`，本人和版主可用
+- **`lib/upload.js`**：按魔数认 PNG / JPG / GIF / WebP，从文件头读宽高
+- 正文里的 `![](/uploads/xxx.png)` 渲染成 `<img>`，带 `width` / `height`，图加载完页面不会往下跳
+- 测试 29 → 41，新增 `test/upload.test.js`
+
+### 安全
+
+- **只信文件头**，不信 `Content-Type` 也不信扩展名。把 `.php` 改名成 `.png` 传上来会被 415 挡掉
+- **不收 SVG**：SVG 是 XML，能带 `<script>`，同源托管等于给自己开一个 XSS 后门
+- **只显示站内图**：外链 `![]()` 一律当普通文字，否则别人贴个第三方 URL 就能拿到每个读者的 IP
+- 文件名由服务端生成，`/uploads/` 只接受 `f_[a-z0-9]+.(png|jpg|gif|webp)` 这个形状，路径穿越直接 404
+- 上传超限时先回 413 再关连接。直接 `destroy()` 的话客户端只看到「网络错误」，用户永远不知道是自己那张图太大
 
 ---
 
@@ -118,7 +142,8 @@
 - 12 个接口测试
 - Docker / docker-compose 部署
 
-[Unreleased]: https://github.com/korbinian1233321-eng/pond/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/korbinian1233321-eng/pond/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/korbinian1233321-eng/pond/compare/v0.1.0...v0.2.0

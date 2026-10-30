@@ -186,23 +186,30 @@ sudo -u pond node scripts/set-password.js alice --admin    # 顺手提成管理�
 
 ## 五、备份
 
-数据全在 `data/pond.db` 一个文件里。**不要直接 `cp`**——WAL 模式下可能漏掉还在日志里的数据。
+数据在 `data/` 目录里：`pond.db` 是内容，`uploads/` 是图片。**两个都要备。**
+
+只备数据库的话，帖子里的图会全部变成裂图——文件名还在，文件没了。
+
+`pond.db` **不要直接 `cp`**——WAL 模式下可能漏掉还在日志里的数据。
 
 ```bash
 sudo -u pond sqlite3 /srv/pond/data/pond.db ".backup '/srv/backup/pond-$(date +%F).db'"
+sudo -u pond rsync -a --delete /srv/pond/data/uploads/ /srv/backup/uploads/
 ```
 
-放 cron 里每天跑一次，顺手把超过 30 天的删掉：
+放 cron 里每天跑一次，顺手把超过 30 天的数据库快照删掉：
 
 ```bash
 sudo crontab -u pond -e
 ```
 
 ```cron
-20 4 * * * sqlite3 /srv/pond/data/pond.db ".backup '/srv/backup/pond-$(date +\%F).db'" && find /srv/backup -name 'pond-*.db' -mtime +30 -delete
+20 4 * * * sqlite3 /srv/pond/data/pond.db ".backup '/srv/backup/pond-$(date +\%F).db'" && rsync -a /srv/pond/data/uploads/ /srv/backup/uploads/ && find /srv/backup -name 'pond-*.db' -mtime +30 -delete
 ```
 
 `sqlite3` 要单独装：`sudo apt install -y sqlite3`。
+
+图片用 `rsync` 而不是每天一份完整快照——它们不会变（文件名带随机 id），同步一次就够了，不用占 30 倍的磁盘。
 
 ---
 
@@ -218,6 +225,6 @@ sudo crontab -u pond -e
 - [ ] `https://你的域名/p/随便一层楼` 关掉 JS 还能看到正文
 - [ ] `https://你的域名/sitemap.xml` 里是**你的**域名，不是 `127.0.0.1`
 - [ ] 鱼汛发一条消息，另一个浏览器立刻能看到
-- [ ] 备份 cron 跑过一次，`/srv/backup` 里有文件
+- [ ] 备份 cron 跑过一次，`/srv/backup` 里有 db **和 uploads**
 
 最后两条最容易忘，也最容易在出事时后悔。

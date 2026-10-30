@@ -16,6 +16,7 @@ const auth = require('./lib/auth');
 const chat = require('./lib/chat');
 const { handle } = require('./lib/api');
 const render = require('./lib/render');
+const upload = require('./lib/upload');
 const { serveStatic, fail } = require('./lib/http');
 const { seed, DEMO_PASSWORD } = require('./lib/seed');
 const site = require('./pond.config');
@@ -149,6 +150,28 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    // 用户上传的图片。文件名由服务端生成，形状不对直接 404，不给路径穿越留口子。
+    if (rawPath.startsWith('/uploads/')) {
+      const name = rawPath.slice('/uploads/'.length);
+      const file = upload.pathOf(name);
+      if (!file || !fs.existsSync(file)) {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        return res.end('404 Not Found');
+      }
+      const ext = name.slice(name.lastIndexOf('.') + 1);
+      const kind = Object.values(upload.KINDS).find((k) => k.ext === ext);
+      const buf = fs.readFileSync(file);
+      res.writeHead(200, {
+        'Content-Type': kind ? kind.mime : 'application/octet-stream',
+        'Content-Length': buf.length,
+        // 文件名带随机 id，内容永不改变，可以放心让浏览器和 CDN 长期缓存
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        // 就算哪天有人传上来一张能执行的东西，也别让浏览器按 HTML 去解释
+        'Content-Disposition': 'inline; filename="' + name + '"'
+      });
+      return res.end(buf);
+    }
+
     if (serveStatic(res, PUBLIC_DIR, url) !== false) return;
     // 单页应用回退：无扩展名的路径一律交给前端路由（/chat、/basket 这些）
     if (!path.extname(rawPath)) {
@@ -171,11 +194,21 @@ const server = http.createServer(async (req, res) => {
     }
   } catch (err) {
     if (res.headersSent) return;
+    // 请求体还没收完就出错了（比如传了张 20MB 的图被 413 挡下）。
+    // 这时候不能直接断 socket——响应还没发出去，客户端只会看到「网络错误」。
+    // 先让 Node 把响应写完，再把连接关掉，客户端就能读到「图片太大了」。
+    const halfRead = !req.complete;
+    if (halfRead) res.setHeader('Connection', 'close');
+
     if (err && err.status) {
       fail(res, err.status, err.code || 'error', err.message, err.extra);
     } else {
       console.error('[pond] 未处理的错误:', err);
       fail(res, 500, 'internal', '服务器出了点问题');
+    }
+
+    if (halfRead) {
+      res.on('finish', () => { try { req.socket.end(); } catch { /* 已经关了 */ } });
     }
   }
 });
