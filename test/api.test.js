@@ -16,6 +16,9 @@ const DB_FILE = path.join(os.tmpdir(), 'pond-test-' + process.pid + '.db');
 process.env.POND_DB = DB_FILE;
 process.env.POND_DATA_DIR = path.dirname(DB_FILE);
 process.env.POND_HOST = '127.0.0.1';
+// 这批测试关心的是帖子、投喂、信任等级这些，不是邀请制。
+// 邀请制有单独的 invite.test.js，这里用开放注册，免得每个用例都要先造码。
+process.env.POND_REGISTRATION = 'open';
 // 测试依赖这批固定示例数据。站点配置改成自己的塘口后，seed 默认会跳过，
 // 所以这里强制写入，保证 npm test 在任何 fork 里都能跑。
 process.env.POND_SEED_FORCE = '1';

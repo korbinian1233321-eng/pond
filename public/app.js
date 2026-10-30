@@ -24,6 +24,8 @@
     replying: null,
     onlyOP: false,
     notif: null,
+    // 邀请码面板：null 表示还没拉过
+    invites: null,
     loading: false,
     draftTags: [],
     // 鱼汛：msgs 只在内存里滚动，进页面时从服务端拉最近 60 条
@@ -500,6 +502,10 @@
     // 塘主关了图片，就把所有「图片」按钮收起来。CSS 按 body 上的类隐藏，
     // 这样动态生成的回复框按钮也一并生效，不用在每个渲染分支里判断。
     document.body.classList.toggle('no-images', c.images !== true);
+    // 关门的塘连「注册」这个页签都不该出现，省得人点了才被拒
+    var closed = c.registration === 'closed';
+    document.body.classList.toggle('no-register', closed);
+    if (closed) $('#registerOnly').hidden = true;
   }
 
   /** 标题跟着视图走。爬虫看的是服务端那份，这里是给用户切页面时用的。 */
@@ -833,6 +839,129 @@
   }
 
   /* ---------- 渲染：用户 / 鱼篓 / 关注 ---------- */
+  /* ---------- 邀请码 ---------- */
+  /*
+   * 只在「自己的鱼档」页出现。别人看你的鱼档看不到你手上有什么码——
+   * 那等于把门票挂在门口。
+   */
+
+  function dayLeft(ts) {
+    var d = Math.ceil((ts - Date.now()) / 86400000);
+    return d > 0 ? d + ' 天后过期' : '今天过期';
+  }
+
+  function inviteRowHTML(it) {
+    var live = it.available;
+    var tag = it.usedAt ? '已使用' : (it.expired ? '已过期' : '可用');
+    var cls = it.usedAt ? 'used' : (it.expired ? 'dead' : 'live');
+    var meta = it.usedAt ? '已经有人用掉了'
+      : it.expired ? '过期了，重新要一个'
+        : dayLeft(it.expiresAt);
+    return '<li class="invite-row' + (live ? '' : ' dim') + '">' +
+      '<button class="invite-code' + (live ? '' : ' off') + '"' +
+      (live ? ' data-act="invite-copy" data-code="' + esc(it.code) + '" title="点一下复制"' : ' disabled') +
+      '>' + esc(it.code) + '</button>' +
+      '<span class="invite-meta">' + esc(it.note || meta) +
+      (it.note ? ' · ' + esc(meta) : '') + '</span>' +
+      '<span class="invite-tag ' + cls + '">' + tag + '</span>' +
+      (live ? '<button class="invite-x" data-act="invite-revoke" data-id="' + esc(it.id) + '" title="撤销">×</button>' : '') +
+      '</li>';
+  }
+
+  function inviteCardHTML() {
+    var d = S.invites;
+    var left = d ? d.quotaLeft : null;
+    var endless = left === null;
+    var sub = !d ? '正在看…'
+      : endless ? '你是管理员，想发多少发多少。'
+        : left > 0
+          ? '还能发 <b>' + left + '</b> 个。每个码只能用一次，' + d.ttlDays + ' 天后自动作废。'
+          : '手上的码都还没用掉，等有人用了一个再来要。';
+
+    var items = (d && d.items) || [];
+    var liveItems = items.filter(function (x) { return x.available; });
+    var list = items.length
+      ? '<ul class="invite-list">' + items.map(inviteRowHTML).join('') + '</ul>'
+      : '<p class="invite-empty">还没发过码。点右上角「生成一个」，把码发给想请的人。</p>';
+
+    return '<section class="invite-card">' +
+      '<div class="invite-head">' +
+      '<h2>邀请码</h2>' +
+      '<button class="btn btn-sm' + (d && !endless && left === 0 ? '' : ' btn-primary') + '"' +
+      ' data-act="invite-new"' + (d && !endless && left === 0 ? ' disabled' : '') + '>' +
+      (d && !endless && left === 0 ? '名额用完了' : '生成一个') + '</button>' +
+      '</div>' +
+      '<p class="invite-sub">' + sub + '</p>' +
+      list +
+      (liveItems.length ? '<p class="invite-foot">点码就能复制。发出去之前想收回，点右边的 ×。</p>' : '') +
+      '</section>';
+  }
+
+  function paintInvites() {
+    var box = document.getElementById('inviteBox');
+    if (!box) return;
+    box.innerHTML = inviteCardHTML();
+  }
+
+  function loadInvites() {
+    if (!S.me || regMode() !== 'invite') return Promise.resolve();
+    return api('/invites').then(function (d) {
+      S.invites = d;
+      paintInvites();
+    }).catch(function () {
+      // 拉不到就让面板空着，不弹错——这不是主流程
+      S.invites = { items: [], quotaLeft: 0, quota: 0, ttlDays: 0 };
+      paintInvites();
+    });
+  }
+
+  function newInvite() {
+    var btn = document.querySelector('[data-act="invite-new"]');
+    if (btn) btn.disabled = true;
+    api('/invites', { method: 'POST', body: {} })
+      .then(function (d) {
+        S.invites = null;
+        return loadInvites().then(function () {
+          toast('生成了 ' + d.invite.code + '，点一下就复制');
+        });
+      })
+      .catch(function (err) {
+        if (btn) btn.disabled = false;
+        toastErr(err);
+      });
+  }
+
+  function revokeInvite(id) {
+    api('/invites/' + encodeURIComponent(id), { method: 'DELETE' })
+      .then(function () {
+        toast('撤回了');
+        return loadInvites();
+      })
+      .catch(toastErr);
+  }
+
+  function copyInvite(code) {
+    var done = function () { toast('复制好了：' + code); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(done, function () { fallbackCopy(code, done); });
+    } else {
+      fallbackCopy(code, done);
+    }
+  }
+
+  /** 剪贴板 API 要 https 或 localhost。局域网用 http 访问时得走老办法。 */
+  function fallbackCopy(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { toast('复制不了，手动抄一下：' + text, true); }
+    document.body.removeChild(ta);
+  }
+
   function renderUser() {
     var u = S.user;
     if (!u) return;
@@ -853,8 +982,11 @@
         '<button class="btn btn-sm' + (u.following ? ' btn-ghost' : '') + '" data-act="follow" data-user="' +
         esc(u.id) + '">' + (u.following ? '已关注' : '关注这条鱼') + '</button>') +
       '</div>';
+    if (u.isMe && regMode() === 'invite') html += '<div id="inviteBox">' + inviteCardHTML() + '</div>';
     html += listBlockHTML({ emptyTitle: '还没开过楼', emptySub: '这条鱼只在别人的楼里冒泡。' });
     $('#main').innerHTML = html;
+    // 码列表是单独的接口，先渲染骨架再补内容，别让整个鱼档等它
+    if (u.isMe) loadInvites();
   }
 
   function renderBasket() {
@@ -1168,8 +1300,14 @@
   /* ---------- 登录 ---------- */
   var authMode = 'login';
 
+  /** 谁能注册：invite（要码）/ open（随便注册）/ closed（关门） */
+  function regMode() {
+    return (S.config && S.config.registration) || 'invite';
+  }
+
   function openAuth(mode) {
     authMode = mode || 'login';
+    if (authMode === 'register' && regMode() === 'closed') authMode = 'login';
     $('#authModal').hidden = false;
     $('#authErr').hidden = true;
     syncAuthMode();
@@ -1177,10 +1315,14 @@
   }
   function syncAuthMode() {
     var isReg = authMode === 'register';
+    var needCode = isReg && regMode() === 'invite';
     $('#authTitle').textContent = isReg ? '注册一条新鱼' : '登录鱼塘';
     $('#registerOnly').hidden = !isReg;
+    $('#inviteField').hidden = !needCode;
     $('#authSubmit').textContent = isReg ? '注册并进塘' : '登录';
-    $('#authHint').textContent = isReg ? '新鱼第一天只能回复，不能开楼' : '没有账号？点上面的「注册」';
+    $('#authHint').textContent = isReg
+      ? (needCode ? '要邀请码才能进，找塘里的人要一个' : '新鱼第一天只能回复，不能开楼')
+      : '没有账号？点上面的「注册」';
     $('#authPass').setAttribute('autocomplete', isReg ? 'new-password' : 'current-password');
     $$('#authSeg .seg-item').forEach(function (b) {
       b.classList.toggle('on', b.getAttribute('data-auth') === authMode);
@@ -1200,17 +1342,27 @@
       return;
     }
 
+    var needCode = authMode === 'register' && regMode() === 'invite';
+    var code = needCode ? $('#authInvite').value.trim() : '';
+    if (needCode && !code) {
+      errEl.textContent = '邀请码是必填的，没有码进不来';
+      errEl.hidden = false;
+      return;
+    }
+
     var btn = $('#authSubmit');
     btn.disabled = true;
     var payload = authMode === 'register'
       ? { username: username, password: password, fishName: $('#authFish').value.trim() || username, fishType: $('#authType').value }
       : { username: username, password: password };
+    if (needCode) payload.invite = code;
 
     api('/auth/' + authMode, { method: 'POST', body: payload })
       .then(function (d) {
         S.me = d.me;
         $('#authModal').hidden = true;
         $('#authPass').value = '';
+        $('#authInvite').value = '';
         return refreshBootstrap().then(function () {
           toast(authMode === 'register' ? '进塘了，先去盖两层楼' : '欢迎回来');
           return load();
@@ -1608,6 +1760,12 @@
         return api('/mod/chat', { method: 'POST', body: { messageId: t.getAttribute('data-id') } })
           .then(function () { toast('删掉了'); })
           .catch(toastErr);
+      case 'invite-new':
+        return newInvite();
+      case 'invite-revoke':
+        return revokeInvite(t.getAttribute('data-id'));
+      case 'invite-copy':
+        return copyInvite(t.getAttribute('data-code'));
       case 'logout':
         return logout();
       case 'notif-open': {

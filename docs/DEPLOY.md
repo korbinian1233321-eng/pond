@@ -92,6 +92,7 @@ POND_SECURE_COOKIE=1
 POND_TRUST_PROXY=1
 POND_ADMIN=你的账号名
 POND_NO_SEED=1
+POND_REGISTRATION=invite
 ```
 
 逐个说为什么：
@@ -100,7 +101,8 @@ POND_NO_SEED=1
 - **`POND_SECURE_COOKIE=1`**：走 HTTPS 时必须开，不然会话 Cookie 会跟着明文请求发出去。
 - **`POND_BASE_URL`**：canonical 和 sitemap 用它拼网址。不设就从 `Host` 头推，反代配错时会给出不一致的网址，搜索引擎会当成两个站。
 - **`POND_NO_SEED=1`**：不写入示例数据。示例数据里的 `admin / pond1234` 是公开密码。
-- **`POND_ADMIN`**：写上你的账号名，注册即管理员。
+- **`POND_ADMIN`**：写上你的账号名，注册即管理员，而且**不用邀请码**——不然新站一个码都没有，你自己也进不去。
+- **`POND_REGISTRATION=invite`**：默认就是这个值，写出来是为了防止哪天被环境变量覆盖成 `open`。对公网的塘开着开放注册，第一个周末就会被注册机扫到。
 
 ### 4. systemd
 
@@ -163,6 +165,36 @@ sudo -u pond node scripts/set-password.js alice 新口令      # 指定口令
 sudo -u pond node scripts/set-password.js alice --admin    # 顺手提成管理员
 ```
 
+**然后发第一个邀请码。**
+
+`POND_ADMIN` 那个账号注册时不需要码，但别人需要。两个办法：
+
+```bash
+# 在服务器上发，最省事
+sudo -u pond node scripts/invite.js new --note "给阿金"
+
+# 或者登录后进「我的鱼档」，页面上有邀请面板，点「生成一个」
+```
+
+面板里能看见每个码是可用、已用还是过期，发错了点 × 撤回。码只能用一次，14 天后自动作废，普通成员同时最多囤 3 个——想要更多就等手上的被用掉。
+
+`node scripts/invite.js list` 看全部码，`revoke ABCD-EFGH` 撤掉发错的。
+
+> 码长这样：`ABCD-EFGH`。去掉了 `I L O 0 1`，因为截图和手抄时这几个最容易认错。小写、多打空格、漏打横线都认。
+
+想改成开放注册（不建议）：
+
+```bash
+sudo -u pond sed -i 's/^POND_REGISTRATION=.*/POND_REGISTRATION=open/' .env
+sudo systemctl restart pond
+```
+
+完全关门（`closed`）之后，网页上没有任何注册入口，只能从服务器建号：
+
+```bash
+sudo -u pond node scripts/add-user.js ajin --fish 青柠气泡
+```
+
 ---
 
 ## 四、关于微信
@@ -220,6 +252,8 @@ sudo crontab -u pond -e
 - [ ] `node -v` >= 22.5
 - [ ] `.env` 里 `POND_HOST=0.0.0.0`、`POND_TRUST_PROXY=1`、`POND_SECURE_COOKIE=1`、`POND_BASE_URL` 都设了
 - [ ] `POND_NO_SEED=1`，或者已经改掉示例账号的口令
+- [ ] `POND_REGISTRATION=invite`，而且 `node scripts/invite.js list` 里至少有一个能用的码
+- [ ] 退出登录，试着不带码注册一次——应该被拦住，而不是真的建出账号
 - [ ] 防火墙只开 22 / 80 / 443
 - [ ] `https://你的域名/` 能开，地址栏是小锁
 - [ ] `https://你的域名/p/随便一层楼` 关掉 JS 还能看到正文

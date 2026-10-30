@@ -44,6 +44,10 @@
 | 外链图片追踪 | 正文里只渲染 `/uploads/` 开头的图，外链 `![]()` 当普通文字，第三方拿不到读者 IP | `lib/render.js` / `public/app.js` |
 | SQL 注入 | 全部走 `prepare` 占位符，没有字符串拼接用户输入 | `lib/api.js` |
 | 越权 | 每个写接口都过 `needAuth()` / `needMod()` | `lib/api.js` |
+| 注册机 | 默认邀请制；码一次性、有有效期、按人限配额 | `lib/invite.js` |
+| 邀请码被猜 | 8 位 × 31 个字符（去掉 `I L O 0 1`），用 `crypto.randomInt` 而不是 `Math.random`；猜错的尝试也受按 IP 限流 | `lib/invite.js` |
+| 一个码进两个人 | 占码用条件 `UPDATE ... WHERE used_by IS NULL`，两个并发请求只有一个 `changes = 1`，另一个被拒并回滚刚建的用户行 | `lib/invite.js` / `lib/api.js` |
+| 邀请码枚举 | 错的码和用过的码返回同一句提示，不区分「不存在」和「已被使用」 | `lib/api.js` |
 
 ## 部署时的安全清单
 
@@ -53,6 +57,7 @@
 - [ ] 删掉了 `data/` 目录，用 `POND_NO_SEED=1` 启动（否则示例账号 `admin / pond1234` 会留在生产环境）
 - [ ] 反代后面设了 `POND_TRUST_PROXY=1`，**并且**用防火墙挡住了 3000 端口
 - [ ] 数据库文件不在 Web 根目录下（默认在 `data/`，本来就不对外）
+- [ ] `POND_REGISTRATION` 是 `invite`（或 `closed`）。`open` 意味着任何人都能建号，注册机第一个周末就会找上门
 - [ ] 定期备份 `pond.db` **和 `data/uploads/`**——只备份数据库的话，所有帖子里的图都会变成裂图
 
 最后两条容易踩：`POND_TRUST_PROXY` 和防火墙必须一起做。只开信任不开防火墙，客户端可以直接连 3000 端口伪造 `X-Forwarded-For`，限流全废；只开防火墙不开信任，所有访客被算成 `127.0.0.1`，一个人能把全站限流掉。

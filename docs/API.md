@@ -44,7 +44,7 @@
 
 ```json
 {
-  "config": { "name": "大肥鱼塘", "slug": "dafeiyu", "tagline": "...", "desc": "...", "rules": ["..."], "tags": ["..."], "trust": { "postMinAgeHours": 24, "postMinReplies": 3 } },
+  "config": { "name": "大肥鱼塘", "slug": "dafeiyu", "tagline": "...", "desc": "...", "rules": ["..."], "tags": ["..."], "trust": { "postMinAgeHours": 24, "postMinReplies": 3 }, "images": false, "registration": "invite", "invite": { "quota": 3, "ttlDays": 14 } },
   "me": { "id": "u_x", "username": "admin", "fishName": "塘主", "role": "admin", "trust": 2, "unread": 0, "bookmarks": 0, "following": 0, "inPond": true },
   "tags": [{ "name": "鱼言鱼语", "count": 3 }],
   "stats": { "posts": 7, "floors": 20, "replies": 23, "users": 9, "members": 9, "today": 0, "recent": 2 },
@@ -60,7 +60,7 @@
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/auth/register` | `{username, password, fishName?, fishType?}` |
+| POST | `/api/auth/register` | `{username, password, fishName?, fishType?, invite?}` |
 | POST | `/api/auth/login` | `{username, password}` |
 | POST | `/api/auth/logout` | 清除会话 |
 | GET | `/api/me` | 当前用户 |
@@ -68,7 +68,55 @@
 
 注册规则：账号 `^[a-z0-9_-]{3,24}$`，密码 8–128 位。重复账号返回 `409 username_taken`。
 
+### 注册开关
+
+`config.registration` 决定谁能注册：
+
+| 值 | 行为 |
+|---|---|
+| `invite`（默认） | 必须带 `invite` 邀请码。站长账号（`POND_ADMIN`）例外 |
+| `open` | 谁都能注册 |
+| `closed` | 一律 `403 registration_closed`，只能从服务器上用 `scripts/add-user.js` 建号 |
+
+邀请码大小写、空格、横线都无所谓（`abcd efgh` 和 `ABCD-EFGH` 是同一个），服务端统一归一化再查。校验顺序：账号格式 → 密码长度 → 邀请码 → 账号重复。码在用户行写成功之后才被占住，写失败会原样还回去。
+
+用邀请码注册的人 `trust` 直接是 1，不用等满 24 小时——邀请本身就是一种担保。
+
 错误码：`bad_username` `weak_password` `username_taken` `bad_credentials` `unauthorized`
+`registration_closed` `invite_required` `invite_invalid`
+
+---
+
+## 邀请码
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/invites` | 我发出去的码 + 剩余名额 |
+| POST | `/api/invites` | `{note?}` 生成一个 |
+| DELETE | `/api/invites/:id` | 撤销一个还没用过的 |
+
+```json
+{
+  "mode": "invite",
+  "enabled": true,
+  "items": [
+    { "id": "iv_x", "code": "ABCD-EFGH", "note": "给阿金", "createdAt": 1760000000000,
+      "expiresAt": 1761200000000, "usedAt": null, "expired": false, "available": true }
+  ],
+  "quotaLeft": 2,
+  "quota": 3,
+  "ttlDays": 14
+}
+```
+
+- `quotaLeft` 为 `null` 表示不限量（站长和版主）
+- `items` 最多返回最近 50 个，含已用和已过期的——「我发出去的那些都去哪了」得看得见
+- 一个码只能用一次；撤销只能撤自己发的、且还没被用过的
+- 只列自己发的码。别人手上有什么码属于隐私，看不到
+
+`registration` 不是 `invite` 时，`GET` 返回 `enabled: false`，`POST` 返回 `403 invites_off`。
+
+错误码：`invites_off` `quota_full` `forbidden` `used` `not_found`
 
 ---
 
@@ -326,6 +374,11 @@ curl -N http://127.0.0.1:3000/api/chat/stream
 | `forbidden` | 403 | 权限不足 |
 | `trust_too_low` | 403 | 新号还不能开楼 |
 | `locked` | 403 | 楼已锁定 |
+| `registration_closed` | 403 | 这个塘关掉了注册 |
+| `invite_required` | 403 | 邀请制但没填码 |
+| `invite_invalid` | 403 | 码不对、已用过或已过期 |
+| `invites_off` | 403 | 开放注册的塘不需要码 |
+| `quota_full` | 403 | 手上的码还没用完 |
 | `not_found` | 404 | 资源不存在 |
 | `username_taken` | 409 | 账号重复 |
 | `payload_too_large` | 413 | 请求体超过 256KB |

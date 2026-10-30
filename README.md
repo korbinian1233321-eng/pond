@@ -114,6 +114,9 @@ Pond 就只做这件事，做完整，做干净。前四条是论坛，最后一
 **账号与治理**
 
 - 注册 / 登录 / 退出，scrypt 哈希 + HttpOnly 会话 Cookie
+- **邀请制**：默认只有拿到邀请码的人才能注册。码一次性、14 天作废、每人同时最多囤 3 个，站长和版主不限
+- 用邀请码进来的人不用等新手期，进来就能开楼——邀请本身就是担保
+- 鱼档页有邀请面板：生成、复制、撤销，看得见自己发出去的码有没有被用掉
 - 信任等级：**新号 24 小时内只能回复，不能开楼**（回复满 3 层或注册满 24 小时自动解锁）
 - 版主：置顶、锁定、删除帖子与楼层
 - 举报：任何登录用户可举报，版主在处理列表里看
@@ -127,8 +130,7 @@ Pond 就只做这件事，做完整，做干净。前四条是论坛，最后一
 - 前端是原生 JS，无框架、无打包、无构建步骤
 - 响应式：桌面三栏 / 平板两栏 / 手机单栏 + 横向滑动导航（[手机端截图](docs/screenshots/chat-mobile.png)）
 - 全站 CSP、`X-Content-Type-Options`、`SameSite=Lax` Cookie
-- 41 个测试（`node --test`，无测试框架依赖），含一条真的开 SSE 连接收广播的用例、一组「关掉 JS 还有没有内容」的断言，和一组「传假图能不能混过去」的上传用例
-
+- 56 个测试（`node --test`，无测试框架依赖），含一条真的开 SSE 连接收广播的用例、一组「关掉 JS 还有没有内容」的断言、一组「传假图能不能混过去」的上传用例，和一组「没码 / 错码 / 过期码 / 用过的码」的邀请测试
 ---
 
 ## 快速开始
@@ -193,6 +195,38 @@ POND_ADMIN=yourname node server.js
 
 > 为什么不「自动把第一个注册的人设成管理员」？因为开放注册的站点，第一个来的人不一定是站主。让人自己声明，比事后翻数据库友好。
 
+### 邀请制：第一个码从哪来
+
+默认 `registration: 'invite'`，没有码就进不来。但塘刚开的时候，塘里一个人都没有，谁给你码？
+
+两条路，按顺序走：
+
+```bash
+# 1. 站主自己先进去（POND_ADMIN 的账号不用邀请码）
+POND_ADMIN=yourname node server.js
+# 打开网页注册 yourname —— 这就是管理员了
+
+# 2. 之后从鱼档页的「邀请码」面板发码，或者直接在服务器上发
+node scripts/invite.js new --note "给阿金"
+```
+
+`node scripts/invite.js list` 看所有码的下场（可用 / 已使用 / 已过期），`revoke` 撤掉发错了的。码长这样：`ABCD-EFGH`，去掉了容易认错的 `I L O 0 1`，小写、空格、少打横线都认。
+
+三种模式随时可切，不用改代码：
+
+```bash
+POND_REGISTRATION=open   node server.js   # 谁都能注册
+POND_REGISTRATION=closed node server.js   # 关门，只能 add-user 建号
+```
+
+`closed` 之后网页上没有任何注册入口，要加人只能：
+
+```bash
+node scripts/add-user.js ajin --fish 青柠气泡
+```
+
+> 为什么邀请制是默认值？开放注册的论坛活不过第一个周末——不是被灌水，是被注册机扫到。邀请制把「谁放进来的」变成一条能追的线：每个进来的人都对应一个具体的人。
+
 ### 想改称呼（投喂 / 鱼篓 / 追鱼）
 
 界面上这套词是写死在前端的——它们是这个项目的**主题**，不是配置项。
@@ -221,7 +255,9 @@ POND_ADMIN=yourname node server.js
 |---|---|---|
 | `POND_PORT` | `3000` | 监听端口 |
 | `POND_HOST` | `127.0.0.1` | 监听地址。容器/公网请设 `0.0.0.0` |
-| `POND_ADMIN` | — | 写上账号名，这个账号注册即管理员 |
+| `POND_ADMIN` | — | 写上账号名，这个账号注册即管理员（邀请制下也不需要邀请码） |
+| `POND_REGISTRATION` | `invite` | 谁能注册：`invite` / `open` / `closed` |
+| `POND_IMAGES` | `0` | 设 `1` 允许发图 |
 | `POND_NAME` | 取 `pond.config.js` | 站点名，设了就覆盖配置文件 |
 | `POND_SLUG` | 取 `pond.config.js` | 站点短标识，显示在塘头 |
 | `POND_TAGLINE` | 取 `pond.config.js` | 副标题 |
@@ -355,9 +391,12 @@ pond/
 │   ├── api.test.js      # 18 个接口测试
 │   ├── seo.test.js      # 8 个服务端渲染 / 可收录性测试
 │   ├── proxy.test.js    # 3 个反向代理信任测试（连同 proxy-trust.test.js）
-│   └── upload.test.js   # 12 个图片上传测试（假图、SVG、超大、路径穿越）
+│   ├── upload.test.js   # 12 个图片上传测试（假图、SVG、超大、路径穿越）
+│   └── invite.test.js   # 12 个邀请测试（没码、错码、过期、重用、配额）
 ├── scripts/
-│   └── set-password.js  # 改口令 / 提管理员，没有邮箱时的兜底
+│   ├── set-password.js  # 改口令 / 提管理员，没有邮箱时的兜底
+│   ├── invite.js        # 在服务器上发码 / 看码 / 撤码
+│   └── add-user.js      # registration: 'closed' 时唯一的建号入口
 ├── deploy/
 │   ├── pond.service     # systemd unit，权限已收紧
 │   └── Caddyfile        # 反代 + 自动 HTTPS，SSE 已配好不缓冲
@@ -373,11 +412,13 @@ pond/
 
 ### 数据表
 
-`users` `sessions` `posts` `floors` `replies` `votes` `bookmarks` `follows` `pond_members` `notifications` `reports` `chat_messages` `uploads`
+`users` `sessions` `posts` `floors` `replies` `votes` `bookmarks` `follows` `pond_members` `notifications` `reports` `chat_messages` `uploads` `invites`
 
 投票是一张表打三种目标（`target_type` + `target_id`），所以「投喂帖子 / 投喂楼层 / 投喂楼中楼」共用一套逻辑。
 
 聊天单独一张 `chat_messages`，不跟 `posts` 混。它们的生命周期不一样：帖子是资产，聊天是流水。
+
+邀请码单独一张 `invites`，用过的码不删——「谁把谁带进来的」是要留档的。`users.invited_by` 记的是发码人，不是码本身，这样社交关系在图上一眼能看出来。
 
 ---
 

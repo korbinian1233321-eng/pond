@@ -17,6 +17,7 @@ const chat = require('./lib/chat');
 const { handle } = require('./lib/api');
 const render = require('./lib/render');
 const upload = require('./lib/upload');
+const invite = require('./lib/invite');
 const { serveStatic, fail } = require('./lib/http');
 const { seed, DEMO_PASSWORD } = require('./lib/seed');
 const site = require('./pond.config');
@@ -34,7 +35,10 @@ const config = {
   tags: site.tags || [],
   trust: site.trust || {},
   // 默认关。想开用 POND_IMAGES=1，或改 pond.config.js 里的 images
-  images: process.env.POND_IMAGES ? process.env.POND_IMAGES === '1' : site.images === true
+  images: process.env.POND_IMAGES ? process.env.POND_IMAGES === '1' : site.images === true,
+  // 谁能注册：invite / open / closed
+  registration: process.env.POND_REGISTRATION || site.registration || 'invite',
+  invite: site.invite || {}
 };
 
 /* ---------- 配置自检 ---------- */
@@ -53,6 +57,7 @@ function checkConfig() {
 
 checkConfig();
 auth.configureTrust(config.trust);
+invite.configure(config.invite);
 
 /* ---------- 启动 ---------- */
 
@@ -266,6 +271,9 @@ function deployWarnings() {
   }
   if (exposed && seedResult.seeded) {
     out.push(`示例数据里的 admin / ${DEMO_PASSWORD} 是公开密码，任何人都能登进去当管理员。\n     上线前用 node scripts/set-password.js admin 改掉，或者删掉 data/ 用 POND_NO_SEED=1 重来。`);
+  }
+  if (exposed && config.registration === 'open') {
+    out.push('注册是开放的（POND_REGISTRATION=open）。对公网的塘建议改回 invite——\n     不然第一个周末就会被注册机扫到。');
   }
   return out;
 }
